@@ -2,6 +2,7 @@
 
 import subprocess
 import os
+import shutil
 import json
 import urllib.request
 
@@ -19,27 +20,50 @@ RM_SSH_NAME = "remarkable"
 RM_SSH_IP = ssh_ip()
 RM_CONTENT_PATH = "/home/root/.local/share/remarkable/xochitl"
 
-"""
-# Object describing a file on Remarkable and/or PC
-class File:
-    def __init__(self, rm_path, rm_dict):
-        self.rm_path = rm_path # e.g. /Notes/Document.pdf
-        self.pc_path = RM_SSH_NAME + "rm_path" # e.g. remarkable/Notes/Document.pdf
+def rmnewer(file):
+    rm_path = file["path"]
+    if file["type"] == "DocumentType":
+        rm_mtime = int(file["lastModified"]) # ms
+    else:
+        # TODO: can this fail if also pc_mtime = 0 on the directory?
+        # TODO: get current time stamp (live on RM) instead?
+        rm_mtime = 0 # directories have not stored lastModified 
+    pc_path = RM_SSH_NAME + rm_path
+    pc_exists = os.path.exists(pc_path)
+    pc_mtime = int(os.path.getmtime(pc_path) * 1000) if pc_exists else 0 # ms
+    return rm_mtime > pc_mtime
 
-        self.is_directory = rm_dict["type"] == "CollectionType"
+def download_file(file):
+    rmpath = file["path"]
+    pcpath = "/tmp/remarkable" + rmpath
 
-        self.rm_exists = True # TODO:
-        self.rm_atime = rm_dict["lastOpened"] # ms
-        self.rm_mtime = rm_dict["lastModified"] # ms
+    if file["type"] == "CollectionType":
+        print("MDIR", file["path"])
+        pc_run(f"mkdir {pcpath}")
+    elif file["type"] == "DocumentType":
+        if rmnewer(file):
+            # download
+            print("PULL", file["path"])
+            url = f"http://{RM_SSH_IP}/download/{file['id']}/placeholder"
+            urllib.request.urlretrieve(url, filename=pcpath)
+            atime = int(file["lastOpened"]) / 1000 # s
+            mtime = int(file["lastModified"]) / 1000 # s
+            os.utime(pcpath, (atime, mtime)) # sync with access/modification times from RM
+        else:
+            # copy cached
+            print("SKIP", file["path"])
+            pcpath_cached = RM_SSH_NAME + rmpath
+            shutil.copy2(pcpath_cached, pcpath)
+    else:
+        raise f"Unknown file type: {file['type']}"
 
-        self.pc_exists = os.path.exists(self.pc_path)
-        self.pc_atime = int(os.path.getatime(self.pc_path) * 1000) if self.pc_exists else 0 # ms
-        self.pc_mtime = int(os.path.getmtime(self.pc_path) * 1000) if self.pc_exists else 0 # ms
-"""
+def download_files(skiproot=True, skipfolders=False, skipolder=False):
+    pc_run(f"rm -r /tmp/{RM_SSH_NAME}") # start clean
 
-def rmtraversefiles(func, action, skiproot=True, skipfolders=True, skipolder=False):
-    pc_run(f"rsync -avz {RM_SSH_NAME}:{RM_CONTENT_PATH}/*.metadata .rmmetadata/")
-    mdfilenames = os.listdir(".rmmetadata/")
+    dest = f"./{RM_SSH_NAME}_cache/"
+    cache = f"./{RM_SSH_NAME}/"
+    pc_run(f"rsync -avzd {RM_SSH_NAME}:{RM_CONTENT_PATH}/*.metadata {RM_SSH_NAME}_metadata/")
+    mdfilenames = os.listdir(f"{RM_SSH_NAME}_metadata/")
     files = {
         "": { "visibleName": "", "type": "CollectionType", "children": []}, # start with fictuous root node
     }
@@ -47,7 +71,7 @@ def rmtraversefiles(func, action, skiproot=True, skipfolders=True, skipolder=Fal
     # Build file tree nodes
     for mdfilename in mdfilenames:
         id = mdfilename.removesuffix(".metadata")
-        mdfile = open(f".rmmetadata/{mdfilename}", "r")
+        mdfile = open(f"{RM_SSH_NAME}_metadata/{mdfilename}", "r")
         file = json.load(mdfile)
 
         if file["deleted"]:
@@ -70,68 +94,22 @@ def rmtraversefiles(func, action, skiproot=True, skipfolders=True, skipolder=Fal
         parent = files[parentname]
         parent["children"] += [fileid]
 
-    def rmolder(file, rm_path):
-        if file["type"] == "DocumentType":
-            rm_mtime = int(file["lastModified"]) # ms
-        else:
-            # TODO: can this fail if also pc_mtime = 0 on the directory?
-            # TODO: get current time stamp (live on RM) instead?
-            rm_mtime = 0 # directories have not stored lastModified 
-        pc_path = RM_SSH_NAME + rm_path
-        pc_exists = os.path.exists(pc_path)
-        pc_mtime = int(os.path.getmtime(pc_path) * 1000) if pc_exists else 0 # ms
-        return rm_mtime <= pc_mtime
-
     def traverse(id, path):
         file = files[id]
         path += file["visibleName"]
+        file["path"] = path
 
-        skip = (skiproot and fileid == "") or \
-               (skipfolders and file["type"] == "CollectionType") or \
-               (skipolder and rmolder(file, path))
-        if skip:
-            print("SKIP " + path)
-        else:
-            print(action + " " + path)
-            func(file, path)
+        download_file(file)
 
         for childid in file["children"]:
             traverse(childid, path + "/")
         
     traverse("", "")
 
-def rmlistfiles(verbose=False):
-    def rmlistfile(file, rm_path):
-        if verbose:
-            rm_atime = int(file["lastOpened"])
-            rm_mtime = int(file["lastModified"])
+    # Merge temporary downloaded directory into "actual" Remarkable directory
+    output = pc_run(f"rsync -avzUuih --delete /tmp/{RM_SSH_NAME}/ ./{RM_SSH_NAME}/")
+    print(output)
+    pc_run(f"rm -r /tmp/{RM_SSH_NAME}") # start clean
 
-            pc_path = RM_SSH_NAME + rm_path
-            pc_exists = os.path.exists(pc_path)
-            pc_mtime = int(os.path.getmtime(pc_path) * 1000) if pc_exists else 0 # to seconds (as rm_mtime)
-            pc_atime = int(os.path.getatime(pc_path) * 1000) if pc_exists else 0
-            
-            d_mtime = pc_mtime - rm_mtime
-
-            print(f"* RM: last modified {rm_mtime}" + (f" ({-d_mtime} ms newer)" if d_mtime <= 0 else ""))
-            print(f"* PC: last modified {pc_mtime}" + (f" ({+d_mtime} ms newer)" if d_mtime >= 0 else ""))
-    rmtraversefiles(rmlistfile, "LIST")
-
-def rmpullfiles():
-    def rmpullfile(file, rmpath):
-        pcpath = RM_SSH_NAME + rmpath
-        if file["type"] == "CollectionType":
-            pc_run(f"mkdir {pcpath}")
-        elif file["type"] == "DocumentType":
-            url = f"http://{RM_SSH_IP}/download/{file['id']}/placeholder"
-            urllib.request.urlretrieve(url, filename=pcpath)
-            atime = int(file["lastOpened"]) / 1000 # s
-            mtime = int(file["lastModified"]) / 1000 # s
-            os.utime(pcpath, (atime, mtime)) # sync with access/modification times from RM
-        else:
-            raise f"Unknown file type: {file['type']}"
-    rmtraversefiles(rmpullfile, "PULL", skipfolders=False, skipolder=True) # skip files already downloaded
-            
 if __name__ == "__main__":
-    rmlistfiles(verbose=True)
-    #rmpullfiles()
+    download_files()
