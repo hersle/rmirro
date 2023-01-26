@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
 parser.add_argument("--dry-run", action="store_true")
 parser.add_argument("--confirm", action="store_true")
+# TODO: --favorites-only (or by tags)
+# TODO: --pull-only, --push-only, etc.
 
 def pc_run(cmd):
     output = subprocess.getoutput(cmd)
