@@ -14,10 +14,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
 parser.add_argument("--dry-run", action="store_true")
-
-args = parser.parse_args()
-DRY_RUN = getattr(args, "dry_run")
-RM_SSH_NAME = getattr(args, "ssh-name") # use getattr: https://stackoverflow.com/questions/12834785/having-options-in-argparse-with-a-dash
+parser.add_argument("--confirm", action="store_true")
 
 def pc_run(cmd):
     output = subprocess.getoutput(cmd)
@@ -77,8 +74,6 @@ class Remarkable:
     def restart(self):
         print("Restarting remarkable interface")
         self.run("systemctl restart xochitl") # restart remarkable interface (to show any new files)
-
-rm = Remarkable(RM_SSH_NAME)
 
 class AbstractFile:
     def list(self):
@@ -315,14 +310,14 @@ def sync_action_and_reason(rm_file, pc_file):
 
     return "SKIP", "up-to-date"
 
-def sync_files(rm_file, pc_file):
+def sync_files(rm_file, pc_file, dry_run=True):
     action, reason = sync_action_and_reason(rm_file, pc_file)
     if action != "SKIP":
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
-        prefix = "DRY-" if DRY_RUN else ""
+        prefix = "DRY-" if dry_run else ""
         print(prefix + f"{action} ({reason}): {path}")
 
-        if not DRY_RUN:
+        if not dry_run:
             if action == "PULL":
                 rm_file.download()
             elif action == "PUSH":
@@ -332,24 +327,40 @@ def sync_files(rm_file, pc_file):
 
     return action # let caller determine whether remarkable needs restarting
 
-if __name__ == "__main__":
-    rm.download_metadata()
+def sync(dry_run):
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
 
     rm_needs_restart = False
-
     for rm_file in rm_root.traverse():
         pc_file = rm_file.on_computer()
-        action = sync_files(rm_file, pc_file)
+        action = sync_files(rm_file, pc_file, dry_run=dry_run)
         rm_needs_restart = rm_needs_restart or action == "PUSH"
     for pc_file in pc_root.traverse():
         rm_file = pc_file.on_remarkable()
         if not rm_file: # already processed files on RM in last loop
-            action = sync_files(rm_file, pc_file)
+            action = sync_files(rm_file, pc_file, dry_run=dry_run)
             rm_needs_restart = rm_needs_restart or action == "PUSH"
 
-    if not DRY_RUN:
+    if not dry_run:
         rm.write_last_sync()
         if rm_needs_restart:
             rm.restart()
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    assert not (getattr(args, "confirm") and getattr(args, "dry_run")), "ambiguous use of --confirm and --dry-run"
+
+    ssh_name = getattr(args, "ssh-name")
+    confirm = getattr(args, "confirm")
+    dry_run = getattr(args, "dry_run") or confirm
+
+    rm = Remarkable(ssh_name) # TODO: avoid this global variable
+    rm.download_metadata()
+
+    sync(dry_run)
+
+    if confirm:
+        answer = input("Proceed with these operations (y/n)? ")
+        if answer == "y":
+            sync(False)
