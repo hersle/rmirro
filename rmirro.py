@@ -5,6 +5,7 @@ import os
 import json
 import urllib.request
 import uuid
+import time
 
 def pc_run(cmd):
     output = subprocess.getoutput(cmd)
@@ -19,9 +20,21 @@ class Remarkable:
         self.raw_dir_local = os.path.abspath(f"{self.ssh_name}_metadata_rewrite")
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl"
         self.processed_dir_local = f"{self.ssh_name}_rewrite"
+        self.last_sync_path = self.processed_dir_local + "/.last_sync"
+
+    def last_sync(self):
+        if os.path.exists(self.last_sync_path):
+            with open(self.last_sync_path, "r") as file:
+                return int(file.read())
+        return float("inf") # never synced before (i.e. infinitely far in the future)
+
+    def write_last_sync(self):
+        with open(self.last_sync_path, "w") as file:
+            file.write(str(int(time.time())) + "\n") # s
 
     def download_metadata(self):
         pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/")
+        # TODO: remove files that are in RM trash!
 
     def read_file(self, path, tmpdest="/tmp/rmirro_tmp_file"):
         pc_run(f"scp {self.ssh_name}:{self.raw_dir_remote}/{path} {tmpdest}")
@@ -44,6 +57,7 @@ class Remarkable:
         return pc_run(f"ssh {self.ssh_name} {cmd}")
 
     def restart(self):
+        print("Restarting remarkable interface")
         self.run("systemctl restart xochitl") # restart remarkable interface (to show any new files)
 
 rm = Remarkable("remarkable")
@@ -196,7 +210,7 @@ class ComputerFile(AbstractFile):
         return os.path.isdir(self.path())
 
     def is_file(self):
-        return os.path.is_file(self.path())
+        return os.path.isfile(self.path())
 
     def children(self):
         if self.is_directory():
@@ -216,18 +230,20 @@ class ComputerFile(AbstractFile):
     def last_modified(self):
         return int(os.path.getmtime(self.path())) # s
 
-    def on_remarkable(self):
+    def path_on_remarkable(self):
         rm_path = os.path.relpath(self.path(), start=rm.processed_dir_local)
         if rm_path == ".":
             rm_path = ""
-        return RemarkableFile().find(rm_path)
+        return rm_path
+
+    def on_remarkable(self):
+        return RemarkableFile().find(self.path_on_remarkable())
 
     def upload(self):
         # TODO: what to do if this is a *note* on the remarkable?
         rm_file = self.on_remarkable()
 
         if rm_file:
-            print("should update")
             id = rm_file.id
             metadata = rm_file.metadata()
         else:
@@ -247,7 +263,6 @@ class ComputerFile(AbstractFile):
             else: # is file
                 metadata["type"] = "DocumentType"
                 metadata["lastOpened"] = str(self.last_accessed() * 1000) # only files have this property, # TODO: what to use here?
-            print("upload metadata:", metadata)
 
         metadata["lastModified"] = str(self.last_modified() * 1000)
 
@@ -257,30 +272,69 @@ class ComputerFile(AbstractFile):
         if metadata["type"] == "DocumentType":
             rm.upload_file(self.path(), f"{id}.pdf")
 
+    def remove(self):
+        if self.is_directory():
+            os.rmdir(self.path())
+        else:
+            os.remove(self.path())
+
+# TODO: also return the reason as a string, so it can be printed verbosely?
+def sync_action_and_reason(rm_file, pc_file):
+    if pc_file and pc_file.path_on_remarkable() == ".last_sync":
+        return "SKIP", "auxilliary file"
+
+    if rm_file and not pc_file:
+        return "PULL", "only on RM" # file does not exist on computer, so pull it (for safety, nothing is ever deleted from the remarkable, TODO: change?)
+
+    if pc_file:
+        if rm_file and rm_file.is_file(): # if the file is a directory, there is nothing worth updating
+            if rm_file.last_modified() > pc_file.last_modified():
+                return "PULL", "newer on RM"
+            elif rm_file.last_modified() < pc_file.last_modified():
+                return "PUSH", "newer on PC"
+        elif not rm_file:
+            # file/directory only on PC: was it removed from RM, or created on PC after last sync?
+            # use creation time for directories and modification time for files, since directory modification time is dynamic
+            # TODO: ^ just return creation time from modification time in class instead?
+            # for directories, we cannot work with modified time (depends on directory contents), only created time
+            if (pc_file.is_directory() and pc_file.created() > rm.last_sync()) or (pc_file.is_file() and pc_file.last_modified() > rm.last_sync()):
+                return "PUSH", "added on PC"
+            else:
+                return "DROP", "deleted on RM"
+
+    return "SKIP", "up-to-date on PC"
+
+def sync_files(rm_file, pc_file):
+    action, reason = sync_action_and_reason(rm_file, pc_file)
+    if action != "SKIP":
+        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
+        print(f"{action} ({reason}): {path}")
+
+        if action == "PULL":
+            rm_file.download()
+        elif action == "PUSH":
+            pc_file.upload()
+        elif action == "DROP":
+            pc_file.remove()
+
+    return action # let caller determine whether remarkable needs restarting
+
 if __name__ == "__main__":
     rm.download_metadata()
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
 
-    rm.restart()
-    """
+    rm_needs_restart = False
+
     for rm_file in rm_root.traverse():
         pc_file = rm_file.on_computer()
-        print("RM:", rm_file.path(), "mod", rm_file.last_modified())
-        if pc_file:
-            print("PC:", pc_file.path(), "mod", pc_file.last_modified())
-        else:
-            print("PC:", "DOES NOT EXIST")
-        print()
-    """
+        action = sync_files(rm_file, pc_file)
+        rm_needs_restart = not rm_needs_restart and action == "PUSH"
+    for pc_file in pc_root.traverse():
+        rm_file = pc_file.on_remarkable()
+        action = sync_files(rm_file, pc_file)
+        rm_needs_restart = not rm_needs_restart and action == "PUSH"
 
-    #print(rm_root.children()[0].on_computer().path())
-    #for file in rm_root.traverse(depth_first=False):
-        #print(file.path())
-    #rm_root.list()
-    #rm_root.download(recursive=True, verbose=True, update=True)
-    #print(rm_root.find("AST4320/Lectures/Week 7.pdf").path())
-
-    #print(pc_root.find("AST4320/Lectures/Week 6.pdf").on_remarkable().path())
-    #pc_root.list()
-    #print(pc_root.find("AST4320/").path())
+    rm.write_last_sync()
+    if rm_needs_restart:
+        rm.restart()
