@@ -11,6 +11,8 @@ def pc_run(cmd):
     output = subprocess.getoutput(cmd)
     return output
 
+DRY_RUN = True
+
 # TODO: optimize!!! less file access
 # TODO: what about using DP in RemarkableFile?
 class Remarkable:
@@ -154,29 +156,16 @@ class RemarkableFile(AbstractFile):
             return 0 # TODO: valid?
         return int(self.metadata()["lastOpened"]) // 1000 # s
 
-    def download(self, recursive=False, verbose=False, update=False):
-        # skip this file?
-        pc_file = self.on_computer()
-        skip = update and pc_file and self.last_modified() <= pc_file.last_modified() # TODO: determine whether to skip elsewhere! (otherwise it would also need to be done in upload)
-
-        if skip and verbose:
-            print("SKIP", self.path())
-        else:
-            if verbose:
-                print("PULL", self.path())
-            path_local = rm.processed_dir_local + "/" + self.path()
-            if self.is_directory():
-                os.makedirs(path_local, exist_ok=True) # make directories ourselves
-            else: # is file
-                url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
-                urllib.request.urlretrieve(url, filename=path_local)
-                atime = self.last_accessed() # s
-                mtime = self.last_modified() # s
-                os.utime(path_local, (atime, mtime)) # sync with access/modification times from RM
-
-        if recursive:
-            for child in self.children():
-                child.download(recursive=recursive, verbose=verbose, update=update)
+    def download(self):
+        path_local = rm.processed_dir_local + "/" + self.path()
+        if self.is_directory():
+            os.makedirs(path_local, exist_ok=True) # make directories ourselves
+        else: # is file
+            url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
+            urllib.request.urlretrieve(url, filename=path_local)
+            atime = self.last_accessed() # s
+            mtime = self.last_modified() # s
+            os.utime(path_local, (atime, mtime)) # sync with access/modification times from RM
 
     def on_computer(self):
         pc_file = ComputerFile(rm.processed_dir_local).find(self.path())
@@ -288,19 +277,25 @@ def sync_action_and_reason(rm_file, pc_file):
 
     if pc_file:
         if rm_file and rm_file.is_file(): # if the file is a directory, there is nothing worth updating
-            if rm_file.last_modified() > pc_file.last_modified():
-                return "PULL", "newer on RM"
-            elif rm_file.last_modified() < pc_file.last_modified():
-                return "PUSH", "newer on PC"
+            diff = rm_file.last_modified() - pc_file.last_modified()
+            if diff > 0:
+                return "PULL", f"{+diff}s newer on RM"
+            elif diff < 0:
+                return "PUSH", f"{-diff}s newer on PC"
         elif not rm_file:
             # file/directory only on PC: was it removed from RM, or created on PC after last sync?
             # use creation time for directories and modification time for files, since directory modification time is dynamic
             # TODO: ^ just return creation time from modification time in class instead?
-            # for directories, we cannot work with modified time (depends on directory contents), only created time
-            if (pc_file.is_directory() and pc_file.created() > rm.last_sync()) or (pc_file.is_file() and pc_file.last_modified() > rm.last_sync()):
-                return "PUSH", "added on PC"
+            #
+            # Also, if a user moves a file to the PC directory, the original's modification time can be kept
+            # In this case, we want to compare the creation time
+            # This SHOULD NOT BE DONE if the file exists on the remarkable, because then downloaded files can be uploaded back!
+            pc_time = pc_file.created() if pc_file.is_directory() or pc_file.created() > pc_file.last_modified() else pc_file.last_modified()
+            diff = rm.last_sync() - pc_time
+            if diff < 0:
+                return "PUSH", f"added on PC {-diff}s after last sync"
             else:
-                return "DROP", "deleted on RM"
+                return "DROP", "deleted on RM in {+diff}s after last sync"
 
     return "SKIP", "up-to-date on PC"
 
@@ -310,12 +305,13 @@ def sync_files(rm_file, pc_file):
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
         print(f"{action} ({reason}): {path}")
 
-        if action == "PULL":
-            rm_file.download()
-        elif action == "PUSH":
-            pc_file.upload()
-        elif action == "DROP":
-            pc_file.remove()
+        if not DRY_RUN:
+            if action == "PULL":
+                rm_file.download()
+            elif action == "PUSH":
+                pc_file.upload()
+            elif action == "DROP":
+                pc_file.remove()
 
     return action # let caller determine whether remarkable needs restarting
 
@@ -326,15 +322,20 @@ if __name__ == "__main__":
 
     rm_needs_restart = False
 
+    if DRY_RUN:
+        print("DRY RUN")
+
     for rm_file in rm_root.traverse():
         pc_file = rm_file.on_computer()
         action = sync_files(rm_file, pc_file)
         rm_needs_restart = not rm_needs_restart and action == "PUSH"
     for pc_file in pc_root.traverse():
         rm_file = pc_file.on_remarkable()
-        action = sync_files(rm_file, pc_file)
-        rm_needs_restart = not rm_needs_restart and action == "PUSH"
+        if not rm_file: # already processed files on RM in last loop
+            action = sync_files(rm_file, pc_file)
+            rm_needs_restart = not rm_needs_restart and action == "PUSH"
 
-    rm.write_last_sync()
+    if not DRY_RUN:
+        rm.write_last_sync()
     if rm_needs_restart:
         rm.restart()
