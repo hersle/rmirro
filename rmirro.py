@@ -324,7 +324,7 @@ def sync_files(rm_file, pc_file, dry_run=True):
             elif action == "PUSH":
                 pc_file.upload()
             elif action == "DROP":
-                pc_file.remove()
+                pc_file.remove() # TODO: fails for multiple directories because it deletes top-down. gather and sort all operations before carrying them out?
 
     return action # let caller determine whether remarkable needs restarting
 
