@@ -26,9 +26,9 @@ class Remarkable:
     def __init__(self, ssh_name):
         self.ssh_name = ssh_name
 
-        self.raw_dir_local = os.path.abspath(f"{self.ssh_name}_metadata_rewrite")
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl"
-        self.processed_dir_local = f"{self.ssh_name}_rewrite"
+        self.processed_dir_local = f"{self.ssh_name}"
+        self.raw_dir_local = os.path.abspath(self.processed_dir_local + ".metadata")
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
 
         # "ping" to check if we do indeed have a remarkable connected
@@ -83,6 +83,8 @@ class AbstractFile:
 
     def traverse(self, depth_first=False):
         for child in self.children():
+            if child.name()[0] == ".":
+                continue # skip hidden files
             if depth_first:
                 yield from child.traverse()
                 yield child
@@ -280,9 +282,6 @@ class ComputerFile(AbstractFile):
 
 # TODO: also return the reason as a string, so it can be printed verbosely?
 def sync_action_and_reason(rm_file, pc_file):
-    if pc_file and pc_file.path_on_remarkable() == ".last_sync":
-        return "SKIP", "auxilliary file"
-
     if rm_file and not pc_file:
         return "PULL", "only on RM" # file does not exist on computer, so pull it (for safety, nothing is ever deleted from the remarkable, TODO: change?)
 
@@ -360,7 +359,7 @@ if __name__ == "__main__":
 
     sync(dry_run)
 
-    if confirm:
+    if confirm: # show user changes that will be made (in dry mode), then ask to proceed (in "wet mode")
         answer = input("Proceed with these operations (y/n)? ")
         if answer == "y":
             sync(False)
