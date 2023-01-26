@@ -6,23 +6,39 @@ import json
 import urllib.request
 import uuid
 import time
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog = "rmirro",
+    description = "Mirror PDFs of documents on a Remarkable, and upload documents to it, all from a native file system folder"
+)
+parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
+parser.add_argument("--dry-run", action="store_true")
+
+args = parser.parse_args()
+DRY_RUN = getattr(args, "dry_run")
+RM_SSH_NAME = getattr(args, "ssh-name") # use getattr: https://stackoverflow.com/questions/12834785/having-options-in-argparse-with-a-dash
 
 def pc_run(cmd):
     output = subprocess.getoutput(cmd)
     return output
-
-DRY_RUN = True
 
 # TODO: optimize!!! less file access
 # TODO: what about using DP in RemarkableFile?
 class Remarkable:
     def __init__(self, ssh_name):
         self.ssh_name = ssh_name
-        self.ssh_ip = pc_run(f"ssh {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
+
         self.raw_dir_local = os.path.abspath(f"{self.ssh_name}_metadata_rewrite")
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl"
         self.processed_dir_local = f"{self.ssh_name}_rewrite"
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
+
+        # "ping" to check if we do indeed have a remarkable connected
+        assert self.run("uname -n") == "reMarkable"
+
+        self.ssh_ip = pc_run(f"ssh {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
+        print(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
     def last_sync(self):
         if os.path.exists(self.last_sync_path):
@@ -62,7 +78,7 @@ class Remarkable:
         print("Restarting remarkable interface")
         self.run("systemctl restart xochitl") # restart remarkable interface (to show any new files)
 
-rm = Remarkable("remarkable")
+rm = Remarkable(RM_SSH_NAME)
 
 class AbstractFile:
     def list(self):
@@ -295,15 +311,16 @@ def sync_action_and_reason(rm_file, pc_file):
             if diff < 0:
                 return "PUSH", f"added on PC {-diff}s after last sync"
             else:
-                return "DROP", "deleted on RM in {+diff}s after last sync"
+                return "DROP", f"deleted on RM in {+diff}s after last sync"
 
-    return "SKIP", "up-to-date on PC"
+    return "SKIP", "up-to-date"
 
 def sync_files(rm_file, pc_file):
     action, reason = sync_action_and_reason(rm_file, pc_file)
     if action != "SKIP":
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
-        print(f"{action} ({reason}): {path}")
+        prefix = "DRY-" if DRY_RUN else ""
+        print(prefix + f"{action} ({reason}): {path}")
 
         if not DRY_RUN:
             if action == "PULL":
@@ -322,20 +339,17 @@ if __name__ == "__main__":
 
     rm_needs_restart = False
 
-    if DRY_RUN:
-        print("DRY RUN")
-
     for rm_file in rm_root.traverse():
         pc_file = rm_file.on_computer()
         action = sync_files(rm_file, pc_file)
-        rm_needs_restart = not rm_needs_restart and action == "PUSH"
+        rm_needs_restart = rm_needs_restart or action == "PUSH"
     for pc_file in pc_root.traverse():
         rm_file = pc_file.on_remarkable()
         if not rm_file: # already processed files on RM in last loop
             action = sync_files(rm_file, pc_file)
-            rm_needs_restart = not rm_needs_restart and action == "PUSH"
+            rm_needs_restart = rm_needs_restart or action == "PUSH"
 
     if not DRY_RUN:
         rm.write_last_sync()
-    if rm_needs_restart:
-        rm.restart()
+        if rm_needs_restart:
+            rm.restart()
