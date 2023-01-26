@@ -4,13 +4,11 @@ import subprocess
 import os
 import json
 import urllib.request
+import uuid
 
 def pc_run(cmd):
     output = subprocess.getoutput(cmd)
     return output
-
-def rm_run(cmd):
-    return pc_run(f"ssh {RM_SSH_NAME} {cmd}")
 
 # TODO: optimize!!! less file access
 # TODO: what about using DP in RemarkableFile?
@@ -24,6 +22,29 @@ class Remarkable:
 
     def download_metadata(self):
         pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/")
+
+    def read_file(self, path, tmpdest="/tmp/rmirro_tmp_file"):
+        pc_run(f"scp {self.ssh_name}:{self.raw_dir_remote}/{path} {tmpdest}")
+        with open(tmpdest, "r") as file:
+            return file.read()
+
+    def upload_file(self, src_path, dest_name):
+        pc_run(f"scp {src_path} {self.ssh_name}:{self.raw_dir_remote}/{dest_name}")
+
+    def write_file(self, filename, content):
+        # write locally
+        path_local = f"{self.raw_dir_local}/{filename}"
+        with open(path_local, "w") as file:
+            file.write(content)
+
+        # copy same file to remarkable
+        self.upload_file(path_local, filename)
+
+    def run(self, cmd):
+        return pc_run(f"ssh {self.ssh_name} {cmd}")
+
+    def restart(self):
+        self.run("systemctl restart xochitl") # restart remarkable interface (to show any new files)
 
 rm = Remarkable("remarkable")
 
@@ -51,9 +72,13 @@ class RemarkableFile(AbstractFile):
 
     # TODO: make faster
     def metadata(self):
+        # from local storage
         with open(rm.raw_dir_local + "/" + self.id + ".metadata", "r") as file:
             metadata = json.loads(file.read())
         return metadata
+
+        # over ssh, very slow
+        #return json.loads(rm.read_file(f"{self.id}.metadata"))
 
     def children(self):
         children = []
@@ -69,6 +94,7 @@ class RemarkableFile(AbstractFile):
         if self.is_root:
             return None
         parent_id = self.metadata()["parent"]
+        assert parent_id is not None
         return RemarkableFile(parent_id)
 
     def name(self):
@@ -90,6 +116,8 @@ class RemarkableFile(AbstractFile):
         return path
 
     def find(self, path):
+        if path == "":
+            return self
         for file in self.traverse():
             if file.path() == path:
                 return file
@@ -115,7 +143,7 @@ class RemarkableFile(AbstractFile):
     def download(self, recursive=False, verbose=False, update=False):
         # skip this file?
         pc_file = self.on_computer()
-        skip = update and pc_file and self.last_modified() <= pc_file.last_modified()
+        skip = update and pc_file and self.last_modified() <= pc_file.last_modified() # TODO: determine whether to skip elsewhere! (otherwise it would also need to be done in upload)
 
         if skip and verbose:
             print("SKIP", self.path())
@@ -143,12 +171,23 @@ class RemarkableFile(AbstractFile):
 class ComputerFile(AbstractFile):
     def __init__(self, path):
         self._path = path
+        assert self.extension() in ("", ".pdf"), "can only handle directories and PDFs"
 
     def exists(self):
         return os.path.exists(self.path())
 
     def path(self):
         return self._path
+
+    def name(self):
+        filename = os.path.basename(self.path()) # e.g. "document.pdf"
+        name, ext = os.path.splitext(filename) # e.g. ("document", ".pdf")
+        assert ext in ["", ".pdf"], f"Unknown filetype: {ext}" # TODO: ?
+        return name
+
+    def extension(self):
+        _, ext = os.path.splitext(self.path())
+        return ext
 
     def parent(self):
         return ComputerFile(os.path.dirname(self.path()))
@@ -179,11 +218,51 @@ class ComputerFile(AbstractFile):
 
     def on_remarkable(self):
         rm_path = os.path.relpath(self.path(), start=rm.processed_dir_local)
+        if rm_path == ".":
+            rm_path = ""
         return RemarkableFile().find(rm_path)
+
+    def upload(self):
+        # TODO: what to do if this is a *note* on the remarkable?
+        rm_file = self.on_remarkable()
+
+        if rm_file:
+            print("should update")
+            id = rm_file.id
+            metadata = rm_file.metadata()
+        else:
+            assert self.parent().on_remarkable(), "cannot upload file whose parent does not exist!"
+            id = uuid.uuid4() # create new
+            metadata = {
+                "visibleName": self.name(),
+                "parent": self.parent().on_remarkable().id,
+                "modified": False, # TODO: do I really need to set all these?
+                "metadatamodified": False,
+                "deleted": False,
+                "pinned": False,
+                "version": 0,
+            }
+            if self.is_directory():
+                metadata["type"] = "CollectionType"
+            else: # is file
+                metadata["type"] = "DocumentType"
+                metadata["lastOpened"] = str(self.last_accessed() * 1000) # only files have this property, # TODO: what to use here?
+            print("upload metadata:", metadata)
+
+        metadata["lastModified"] = str(self.last_modified() * 1000)
+
+        # TODO: upload this and PDF!
+        rm.write_file(f"{id}.metadata", json.dumps(metadata) + "\n")
+        rm.write_file(f"{id}.content", json.dumps({}) + "\n") # this file is required for RM to list file properly
+        if metadata["type"] == "DocumentType":
+            rm.upload_file(self.path(), f"{id}.pdf")
 
 if __name__ == "__main__":
     rm.download_metadata()
     rm_root = RemarkableFile()
+    pc_root = ComputerFile(rm.processed_dir_local)
+
+    rm.restart()
     """
     for rm_file in rm_root.traverse():
         pc_file = rm_file.on_computer()
@@ -199,10 +278,9 @@ if __name__ == "__main__":
     #for file in rm_root.traverse(depth_first=False):
         #print(file.path())
     #rm_root.list()
-    rm_root.download(recursive=True, verbose=True, update=True)
+    #rm_root.download(recursive=True, verbose=True, update=True)
     #print(rm_root.find("AST4320/Lectures/Week 7.pdf").path())
 
-    #pc_root = ComputerFile(rm.processed_dir_local)
     #print(pc_root.find("AST4320/Lectures/Week 6.pdf").on_remarkable().path())
     #pc_root.list()
     #print(pc_root.find("AST4320/").path())
