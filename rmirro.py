@@ -73,7 +73,7 @@ class Remarkable:
             return file.read()
 
     def upload_file(self, src_path, dest_name):
-        pc_run(f"scp {src_path} {self.ssh_name}:{self.raw_dir_remote}/{dest_name}")
+        pc_run(f"scp \"{src_path}\" \"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}\"") # TODO: avoid escaping " with proper list use of subprocess
 
     def write_file(self, filename, content):
         # write locally
