@@ -311,36 +311,50 @@ def sync_action_and_reason(rm_file, pc_file):
 
     return "SKIP", "up-to-date"
 
-def sync_files(rm_file, pc_file, dry_run=True):
-    action, reason = sync_action_and_reason(rm_file, pc_file)
-    if action != "SKIP":
-        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
-        prefix = "DRY-" if dry_run else ""
-        print(prefix + f"{action} ({reason}): {path}")
+def iterate_files(rm_root, pc_root):
+    for rm_file in rm_root.traverse():
+        pc_file = rm_file.on_computer()
+        yield (rm_file, pc_file)
+    for pc_file in pc_root.traverse():
+        rm_file = pc_file.on_remarkable()
+        if not rm_file: # already processed files on RM in last loop
+            yield (rm_file, pc_file)
 
+def sync(dry_run):
+    rm_root = RemarkableFile()
+    pc_root = ComputerFile(rm.processed_dir_local)
+
+    commands = []
+    for rm_file, pc_file in iterate_files(rm_root, pc_root):
+        action, reason = sync_action_and_reason(rm_file, pc_file)
+        if action != "SKIP":
+            commands.append((action, reason, rm_file, pc_file))
+
+    # sort commands, so that
+    # * pushes happen first, then pulls, then drops
+    # * push/pull handles shallow files first (creating directories as going down the tree),
+    # * drop handles deep files first (deleting directories going up the tree, since non-empty directories should not be deleted)
+    def key(command):
+        action, reason, rm_file, pc_file = command
+        key1 = ["PULL", "PUSH", "DROP"].index(action) # pull first, then push, then drop
+        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
+        key2 = -len(path) if action == "DROP" else +len(path)  # drop sub-files first (cannot remove non-empty directories)
+        return (key1, key2)
+    commands.sort(key=key)
+
+    # TODO: print and perform commands
+    rm_needs_restart = False
+    for action, reason, rm_file, pc_file in commands:
+        prefix = "DRY-" if dry_run else ""
+        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
+        print(prefix + f"{action} ({reason}): {path}")
         if not dry_run:
             if action == "PULL":
                 rm_file.download()
             elif action == "PUSH":
                 pc_file.upload()
             elif action == "DROP":
-                pc_file.remove() # TODO: fails for multiple directories because it deletes top-down. gather and sort all operations before carrying them out?
-
-    return action # let caller determine whether remarkable needs restarting
-
-def sync(dry_run):
-    rm_root = RemarkableFile()
-    pc_root = ComputerFile(rm.processed_dir_local)
-
-    rm_needs_restart = False
-    for rm_file in rm_root.traverse():
-        pc_file = rm_file.on_computer()
-        action = sync_files(rm_file, pc_file, dry_run=dry_run)
-        rm_needs_restart = rm_needs_restart or action == "PUSH"
-    for pc_file in pc_root.traverse():
-        rm_file = pc_file.on_remarkable()
-        if not rm_file: # already processed files on RM in last loop
-            action = sync_files(rm_file, pc_file, dry_run=dry_run)
+                pc_file.remove()
             rm_needs_restart = rm_needs_restart or action == "PUSH"
 
     if not dry_run:
