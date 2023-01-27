@@ -7,6 +7,7 @@ import urllib.request
 import uuid
 import time
 import argparse
+import shutil
 
 parser = argparse.ArgumentParser(
     prog = "rmirro",
@@ -22,20 +23,23 @@ def pc_run(cmd):
     output = subprocess.getoutput(cmd)
     return output
 
-class Notifier():
+class Logger:
     def __init__(self):
         self.id = None
 
-    def notify(self, title, description="", urgency="normal", icon="input-tablet"):
+    def notify(self, text, urgency="normal", icon="input-tablet"):
+        title = f"Synchronising reMarkable"
         cmd  = "notify-send"
         cmd += " --print-id"
         cmd += f" --replace-id={self.id}" if self.id else ""
         cmd += f" --app-name=rmirro --urgency={urgency} --icon={icon}"
-        cmd += f" \"{title}\"" + (f" \"{description}\"" if description else "")
+        cmd += f" \"{title}\"" + f" \"{text}\""
         output = pc_run(cmd)
         self.id = int(output)
 
-notifier = Notifier()
+    def log(self, text, urgency="normal"):
+        print(text)
+        self.notify(text, urgency=urgency)
 
 class Remarkable:
     def __init__(self, ssh_name):
@@ -50,7 +54,7 @@ class Remarkable:
         assert self.run("uname -n") == "reMarkable"
 
         self.ssh_ip = pc_run(f"ssh {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
-        print(f"Connected to {self.ssh_name} ({self.ssh_ip})")
+        logger.log(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
         self.download_metadata()
 
@@ -81,7 +85,10 @@ class Remarkable:
                 yield id
 
     def download_metadata(self):
-        pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/") # TODO: --delete
+        if os.path.exists(self.raw_dir_local):
+            shutil.rmtree(self.raw_dir_local)
+        os.makedirs(self.raw_dir_local)
+        pc_run(f"rsync -az {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/") # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -386,7 +393,7 @@ def sync(dry_run):
     for action, reason, rm_file, pc_file in commands:
         prefix = "DRY-" if dry_run else ""
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
-        print(prefix + f"{action} ({reason}): {path}")
+        logger.log(prefix + f"{action} ({reason}): {path}", notify=False)
         if not dry_run:
             if action == "PULL":
                 rm_file.download()
@@ -401,6 +408,12 @@ def sync(dry_run):
         if rm_needs_restart:
             rm.restart()
 
+        actions = [command[0] for command in commands]
+        npull = actions.count("PULL")
+        npush = actions.count("PUSH")
+        ndrop = actions.count("DROP")
+        logger.log(f"Finished pulling {npull}, pushing {npush} and dropping {ndrop} files")
+
 if __name__ == "__main__":
     args = parser.parse_args()
     assert not (getattr(args, "confirm") and getattr(args, "dry_run")), "ambiguous use of --confirm and --dry-run"
@@ -409,17 +422,15 @@ if __name__ == "__main__":
     confirm = getattr(args, "confirm")
     dry_run = getattr(args, "dry_run") or confirm
 
+    logger = Logger()
     rm = Remarkable(ssh_name) # TODO: avoid this global variable
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
 
-    notifier.notify(f"Synchronising {rm.ssh_name}")
     sync(dry_run)
 
     if confirm: # show user changes that will be made (in dry mode), then ask to proceed (in "wet mode")
-        notifier.notify(f"Synchronising {rm.ssh_name}", "Waiting for user confirmation")
+        logger.log("Waiting for user confirmation")
         answer = input("Proceed with these operations (y/n)? ")
         if answer == "y":
             sync(False)
-
-    notifier.notify(f"Synchronised {rm.ssh_name}")
