@@ -45,7 +45,7 @@ class Remarkable:
 
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl"
         self.processed_dir_local = f"{self.ssh_name}"
-        self.raw_dir_local = os.path.abspath(self.processed_dir_local + ".metadata")
+        self.raw_dir_local = os.path.abspath(self.processed_dir_local + "/.metadata")
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
 
         # "ping" to check if we do indeed have a remarkable connected
@@ -65,8 +65,7 @@ class Remarkable:
             file.write(str(int(time.time())) + "\n") # s
 
     def download_metadata(self):
-        pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/")
-        # TODO: remove files that are in RM trash!
+        pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/") # TODO: --delete
 
     def read_file(self, path, tmpdest="/tmp/rmirro_tmp_file"):
         pc_run(f"scp {self.ssh_name}:{self.raw_dir_remote}/{path} {tmpdest}")
@@ -110,9 +109,13 @@ class AbstractFile:
                 yield from child.traverse()
 
 class RemarkableFile(AbstractFile):
+    fullpath_to_id_cache = {} # build as we go
+
     def __init__(self, id=""):
         self.is_root = id == ""
         self.id = id
+        if not self.trashed() and self.path() not in self.fullpath_to_id_cache:
+            self.fullpath_to_id_cache[self.path()] = self.id # cache
 
     # TODO: file size?
 
@@ -126,6 +129,15 @@ class RemarkableFile(AbstractFile):
         # over ssh, very slow
         #return json.loads(rm.read_file(f"{self.id}.metadata"))
 
+    def trashed(self):
+        # TODO: if file is trashed, or its parent is trashed
+        if self.id == "trash": # TODO: make is_trash() and is_root()
+            return True
+        if self.is_root:
+            return False
+        return self.parent().trashed()
+
+    # TODO: speed up!
     def children(self):
         children = []
         for filename in os.listdir(rm.raw_dir_local):
@@ -137,11 +149,11 @@ class RemarkableFile(AbstractFile):
         return children
 
     def parent(self):
-        if self.is_root:
-            return None
-        parent_id = self.metadata()["parent"]
-        assert parent_id is not None
-        return RemarkableFile(parent_id)
+        if "parent" in self.metadata():
+            parent_id = self.metadata()["parent"]
+            return RemarkableFile(parent_id)
+        else:
+            return None # e.g. for root and trash
 
     def name(self):
         if self.is_root:
@@ -164,8 +176,12 @@ class RemarkableFile(AbstractFile):
     def find(self, path):
         if path == "":
             return self
+        if not self.is_root:
+            path = self.path() + "/" + path # relative -> full path
+        if path in self.fullpath_to_id_cache:
+            return RemarkableFile(self.fullpath_to_id_cache[path]) # cache
         for file in self.traverse():
-            if file.path() == path:
+            if file.path() == path: # TODO: this is actually for relative paths?
                 return file
         return None
 
@@ -256,7 +272,8 @@ class ComputerFile(AbstractFile):
         return rm_path
 
     def on_remarkable(self):
-        return RemarkableFile().find(self.path_on_remarkable())
+        # TODO: don't create new RM root file
+        return rm_root.find(self.path_on_remarkable())
 
     def upload(self):
         # TODO: what to do if this is a *note* on the remarkable?
@@ -326,21 +343,18 @@ def sync_action_and_reason(rm_file, pc_file):
 
     return "SKIP", "up-to-date"
 
-def iterate_files(rm_root, pc_root):
-    for rm_file in rm_root.traverse():
-        pc_file = rm_file.on_computer()
-        yield (rm_file, pc_file)
-    for pc_file in pc_root.traverse():
-        rm_file = pc_file.on_remarkable()
-        if not rm_file: # already processed files on RM in last loop
-            yield (rm_file, pc_file)
-
 def sync(dry_run):
-    rm_root = RemarkableFile()
-    pc_root = ComputerFile(rm.processed_dir_local)
+    def iterate_files():
+        for rm_file in rm_root.traverse():
+            pc_file = rm_file.on_computer()
+            yield (rm_file, pc_file)
+        for pc_file in pc_root.traverse():
+            rm_file = pc_file.on_remarkable()
+            if not rm_file: # already processed files on RM in last loop
+                yield (rm_file, pc_file)
 
     commands = []
-    for rm_file, pc_file in iterate_files(rm_root, pc_root):
+    for rm_file, pc_file in iterate_files():
         action, reason = sync_action_and_reason(rm_file, pc_file)
         if action != "SKIP":
             commands.append((action, reason, rm_file, pc_file))
@@ -357,7 +371,7 @@ def sync(dry_run):
         return (key1, key2)
     commands.sort(key=key)
 
-    # TODO: print and perform commands
+    # print and perform commands
     rm_needs_restart = False
     for action, reason, rm_file, pc_file in commands:
         prefix = "DRY-" if dry_run else ""
@@ -386,6 +400,8 @@ if __name__ == "__main__":
     dry_run = getattr(args, "dry_run") or confirm
 
     rm = Remarkable(ssh_name) # TODO: avoid this global variable
+    rm_root = RemarkableFile()
+    pc_root = ComputerFile(rm.processed_dir_local)
     rm.download_metadata()
 
     notifier.notify(f"Synchronising {rm.ssh_name}")
