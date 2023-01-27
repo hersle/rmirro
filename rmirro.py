@@ -22,6 +22,21 @@ def pc_run(cmd):
     output = subprocess.getoutput(cmd)
     return output
 
+class Notifier():
+    def __init__(self):
+        self.id = None
+
+    def notify(self, title, description="", urgency="normal", icon="input-tablet"):
+        cmd  = "notify-send"
+        cmd += " --print-id"
+        cmd += f" --replace-id={self.id}" if self.id else ""
+        cmd += f" --app-name=rmirro --urgency={urgency} --icon={icon}"
+        cmd += f" \"{title}\"" + (f" \"{description}\"" if description else "")
+        output = pc_run(cmd)
+        self.id = int(output)
+
+notifier = Notifier()
+
 # TODO: optimize!!! less file access
 # TODO: what about using DP in RemarkableFile?
 class Remarkable:
@@ -373,9 +388,13 @@ if __name__ == "__main__":
     rm = Remarkable(ssh_name) # TODO: avoid this global variable
     rm.download_metadata()
 
+    notifier.notify(f"Synchronising {rm.ssh_name}")
     sync(dry_run)
 
     if confirm: # show user changes that will be made (in dry mode), then ask to proceed (in "wet mode")
+        notifier.notify(f"Synchronising {rm.ssh_name}", "Waiting for user confirmation")
         answer = input("Proceed with these operations (y/n)? ")
         if answer == "y":
             sync(False)
+
+    notifier.notify(f"Synchronised {rm.ssh_name}")
