@@ -54,6 +54,18 @@ class Remarkable:
         self.ssh_ip = pc_run(f"ssh {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
         print(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
+        self.download_metadata()
+
+        # RM .metadata files store the parent of each file.
+        # Manually, keep track of the children of every file, too,
+        # since this is needed for traversing the RM directory tree downwards.
+        self.children_cache = {"": [], "trash": []} # root and trash are "implicit", as they don't appear in filenames
+        for id in self.ids():
+            self.children_cache[id] = []
+        for id in self.ids():
+            metadata = self.read_metadata(id)
+            self.children_cache[metadata["parent"]].append(id)
+
     def last_sync(self):
         if os.path.exists(self.last_sync_path):
             with open(self.last_sync_path, "r") as file:
@@ -64,13 +76,24 @@ class Remarkable:
         with open(self.last_sync_path, "w") as file:
             file.write(str(int(time.time())) + "\n") # s
 
+    def ids(self):
+        for filename in os.listdir(self.raw_dir_local):
+            id, ext = os.path.splitext(filename)
+            if ext == ".metadata":
+                yield id
+
     def download_metadata(self):
         pc_run(f"rsync -avzd {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/") # TODO: --delete
 
-    def read_file(self, path, tmpdest="/tmp/rmirro_tmp_file"):
-        pc_run(f"scp {self.ssh_name}:{self.raw_dir_remote}/{path} {tmpdest}")
-        with open(tmpdest, "r") as file:
+    def read_file(self, filename):
+        with open(self.raw_dir_local + "/" + filename, "r") as file:
             return file.read()
+
+    def read_json(self, filename):
+        return json.loads(self.read_file(filename))
+
+    def read_metadata(self, id):
+        return self.read_json(f"{id}.metadata")
 
     def upload_file(self, src_path, dest_name):
         pc_run(f"scp \"{src_path}\" \"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}\"") # TODO: avoid escaping " with proper list use of subprocess
@@ -83,6 +106,16 @@ class Remarkable:
 
         # copy same file to remarkable
         self.upload_file(path_local, filename)
+
+    def write_json(self, filename, dict):
+        self.write_file(filename, json.dumps(dict) + "\n")
+
+    def write_metadata(self, id, metadata):
+        self.write_json(f"{id}.metadata", metadata)
+        self.children_cache[metadata["parent"]].append(id)
+
+    def write_content(self, id, content):
+        self.write_json(f"{id}.content", content)
 
     def run(self, cmd):
         return pc_run(f"ssh {self.ssh_name} {cmd}")
@@ -97,14 +130,11 @@ class AbstractFile:
             print(child.path())
             child.list()
 
-    def traverse(self, depth_first=False):
+    def traverse(self):
         for child in self.children():
             if child.name()[0] == ".":
                 continue # skip hidden files
-            if depth_first:
-                yield from child.traverse()
-                yield child
-            else: # breadth first
+            else:
                 yield child
                 yield from child.traverse()
 
@@ -122,9 +152,7 @@ class RemarkableFile(AbstractFile):
     # TODO: make faster
     def metadata(self):
         # from local storage
-        with open(rm.raw_dir_local + "/" + self.id + ".metadata", "r") as file:
-            metadata = json.loads(file.read())
-        return metadata
+        return rm.read_metadata(self.id)
 
         # over ssh, very slow
         #return json.loads(rm.read_file(f"{self.id}.metadata"))
@@ -137,16 +165,9 @@ class RemarkableFile(AbstractFile):
             return False
         return self.parent().trashed()
 
-    # TODO: speed up!
     def children(self):
-        children = []
-        for filename in os.listdir(rm.raw_dir_local):
-            if filename.endswith(".metadata"):
-                id = filename.removesuffix(".metadata")
-                file = RemarkableFile(id)
-                if file.parent().id == self.id:
-                    children.append(file)
-        return children
+        for id in rm.children_cache[self.id]:
+            yield RemarkableFile(id)
 
     def parent(self):
         if "parent" in self.metadata():
@@ -275,6 +296,7 @@ class ComputerFile(AbstractFile):
         # TODO: don't create new RM root file
         return rm_root.find(self.path_on_remarkable())
 
+    # TODO: can use RM web interface for uploading, if don't need to make new directories?
     def upload(self):
         # TODO: what to do if this is a *note* on the remarkable?
         rm_file = self.on_remarkable()
@@ -303,8 +325,8 @@ class ComputerFile(AbstractFile):
         metadata["lastModified"] = str(self.last_modified() * 1000)
 
         # TODO: upload this and PDF!
-        rm.write_file(f"{id}.metadata", json.dumps(metadata) + "\n")
-        rm.write_file(f"{id}.content", json.dumps({}) + "\n") # this file is required for RM to list file properly
+        rm.write_metadata(id, metadata)
+        rm.write_content(id, {}) # this file is required for RM to list file properly
         if metadata["type"] == "DocumentType":
             rm.upload_file(self.path(), f"{id}.pdf")
 
@@ -323,9 +345,9 @@ def sync_action_and_reason(rm_file, pc_file):
         if rm_file and rm_file.is_file(): # if the file is a directory, there is nothing worth updating
             diff = rm_file.last_modified() - pc_file.last_modified()
             if diff > 0:
-                return "PULL", f"{+diff}s newer on RM"
+                return "PULL", f"newer on RM"
             elif diff < 0:
-                return "PUSH", f"{-diff}s newer on PC"
+                return "PUSH", f"newer on PC"
         elif not rm_file:
             # file/directory only on PC: was it removed from RM, or created on PC after last sync?
             # use creation time for directories and modification time for files, since directory modification time is dynamic
@@ -337,9 +359,9 @@ def sync_action_and_reason(rm_file, pc_file):
             pc_time = pc_file.created() if pc_file.is_directory() or pc_file.created() > pc_file.last_modified() else pc_file.last_modified()
             diff = rm.last_sync() - pc_time
             if diff < 0:
-                return "PUSH", f"added on PC {-diff}s after last sync"
+                return "PUSH", f"added on PC"
             else:
-                return "DROP", f"deleted on RM in {+diff}s after last sync"
+                return "DROP", f"deleted on RM"
 
     return "SKIP", "up-to-date"
 
@@ -402,7 +424,6 @@ if __name__ == "__main__":
     rm = Remarkable(ssh_name) # TODO: avoid this global variable
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
-    rm.download_metadata()
 
     notifier.notify(f"Synchronising {rm.ssh_name}")
     sync(dry_run)
