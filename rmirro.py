@@ -37,8 +37,6 @@ class Notifier():
 
 notifier = Notifier()
 
-# TODO: optimize!!! less file access
-# TODO: what about using DP in RemarkableFile?
 class Remarkable:
     def __init__(self, ssh_name):
         self.ssh_name = ssh_name
@@ -147,15 +145,8 @@ class RemarkableFile(AbstractFile):
         if not self.trashed() and self.path() not in self.fullpath_to_id_cache:
             self.fullpath_to_id_cache[self.path()] = self.id # cache
 
-    # TODO: file size?
-
-    # TODO: make faster
     def metadata(self):
-        # from local storage
         return rm.read_metadata(self.id)
-
-        # over ssh, very slow
-        #return json.loads(rm.read_file(f"{self.id}.metadata"))
 
     def trashed(self):
         # TODO: if file is trashed, or its parent is trashed
@@ -202,7 +193,7 @@ class RemarkableFile(AbstractFile):
         if path in self.fullpath_to_id_cache:
             return RemarkableFile(self.fullpath_to_id_cache[path]) # cache
         for file in self.traverse():
-            if file.path() == path: # TODO: this is actually for relative paths?
+            if file.path() == path:
                 return file
         return None
 
@@ -324,7 +315,6 @@ class ComputerFile(AbstractFile):
 
         metadata["lastModified"] = str(self.last_modified() * 1000)
 
-        # TODO: upload this and PDF!
         rm.write_metadata(id, metadata)
         rm.write_content(id, {}) # this file is required for RM to list file properly
         if metadata["type"] == "DocumentType":
@@ -336,7 +326,6 @@ class ComputerFile(AbstractFile):
         else:
             os.remove(self.path())
 
-# TODO: also return the reason as a string, so it can be printed verbosely?
 def sync_action_and_reason(rm_file, pc_file):
     if rm_file and not pc_file:
         return "PULL", "only on RM" # file does not exist on computer, so pull it (for safety, nothing is ever deleted from the remarkable, TODO: change?)
@@ -351,7 +340,6 @@ def sync_action_and_reason(rm_file, pc_file):
         elif not rm_file:
             # file/directory only on PC: was it removed from RM, or created on PC after last sync?
             # use creation time for directories and modification time for files, since directory modification time is dynamic
-            # TODO: ^ just return creation time from modification time in class instead?
             #
             # Also, if a user moves a file to the PC directory, the original's modification time can be kept
             # In this case, we want to compare the creation time
