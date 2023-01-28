@@ -408,11 +408,11 @@ def sync(dry_run):
         if rm_needs_restart:
             rm.restart()
 
-        actions = [command[0] for command in commands]
-        npull = actions.count("PULL")
-        npush = actions.count("PUSH")
-        ndrop = actions.count("DROP")
-        logger.log(f"Finished pulling {npull}, pushing {npush} and dropping {ndrop} files")
+    actions = [command[0] for command in commands]
+    npull = actions.count("PULL") if not dry_run else 0
+    npush = actions.count("PUSH") if not dry_run else 0
+    ndrop = actions.count("DROP") if not dry_run else 0
+    logger.log(f"Finished pulling {npull}, pushing {npush} and dropping {ndrop} files")
 
 if __name__ == "__main__":
     args = parser.parse_args()
