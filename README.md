@@ -20,10 +20,10 @@ and documents put in the folder are uploaded to the reMarkable.
 Documents and folders that have been added, modified or removed on the reMarkable or computer since the last run are transferred to or removed from the other device.
 More specifically, the program traverses files and folders on both the reMarkable (RM) and the computer (PC), and takes the following actions depending on where they are present and when they were last modified:
 
-|                                                 | <span style="color: green">•</span> **On PC** | <span style="color: red">•</span> **Not on PC** |
-|-------------------------------------------------|-----------------------------------------------|-------------------------------------------------|
-| <span style="color: green">•</span> **On RM**   | Download/upload if newer on RM/PC             | Download                                        |
-| <span style="color: red">•</span> **Not on RM** | Upload/remove if added after/before last sync |                                                 |
+|                  | 🟢 **On PC**                                  | 🔴 **Not on PC** |
+|------------------|-----------------------------------------------|------------------|
+| 🟢 **On RM**     | Download/upload if newer on RM/PC             | Download         |
+| 🔴 **Not on RM** | Upload/remove if added after/before last sync |                  |
 
 ## Auto-synchronise when connecting USB cable
 
