@@ -35,6 +35,14 @@ However, files on RM can be *overwritten* by files uploaded from PC!
 Run `rm_sync_on_connect_setup.sh` to install an [udev](https://en.wikipedia.org/wiki/Udev) rule on your system (requires root access)
 that automatically runs `rmirro.py` when the reMarkable is connected to your computer.
 
+## Motivation (and opinions)
+
+I created this script because
+* I want my reMarkable *integrated with my computer's native file system*, **not** available only through some cloud solution or additional program.
+* I want to read my reMarkable files as *PDFs* in whichever PDF viewer *I prefer*, **not** through some special viewer in a cloud solution or special program, or after rendering them with third-party program.
+* I want to upload (multiple) PDFs to my reMarkable by dropping them in a folder on my computer, **not** by uploading them (one by one) through a web interface or special program.
+* I want to retrieve annotated PDFs by opening the same file on my computer that I used to upload them in the first place.
+
 ## Disclaimer
 
 The program prompts the user for confirmation before proceeding and executing operations.

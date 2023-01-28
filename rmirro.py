@@ -244,7 +244,7 @@ class RemarkableFile(AbstractFile):
         else: # is file
             url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
             try:
-                urllib.request.urlretrieve(url, filename=path_local) # TODO: offer alternatives to RM's rendering, would relax USB web interface requirement
+                urllib.request.urlretrieve(url, filename=path_local) # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl), would relax USB requirements and allow everything over SSH
             except Exception as e:
                 panic(f"Could not download {url} from the reMarkable USB web interface")
             atime = self.last_accessed() # s
