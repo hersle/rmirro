@@ -25,6 +25,11 @@ More specifically, the program traverses files and folders on both the reMarkabl
 | 🟢 **On RM**     | Download/upload if newer on RM/PC             | Download         |
 | 🔴 **Not on RM** | Upload/remove if added after/before last sync |                  |
 
+Note the "asymmetry" of the two cells where the file is only on one device:
+files are removed from PC if they are deleted from RM (this is the interpretation of "remove if added before last sync"),
+but files are not deleted from RM if they are deleted on PC, to prevent accidental file loss.
+However, files on RM can be *overwritten* by files uploaded from PC!
+
 ## Auto-synchronise when connecting USB cable
 
 Run `rm_sync_on_connect_setup.sh` to install an [udev](https://en.wikipedia.org/wiki/Udev) rule on your system (requires root access)
