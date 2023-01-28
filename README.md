@@ -15,6 +15,8 @@ and documents put in the folder are uploaded to the reMarkable.
 * The reMarkable's [USB web interface](https://remarkablewiki.com/tech/webinterface) must be enabled.
 * The reMarkable must be accessible through [passwordless SSH login](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) (by running e.g. `ssh remarkable`).
 
+**TODO:** Relax the USB requirements by allowing use of some third-party script that can render the reMarkable documents *on the computer*, so everything can function over (wired or wireless) SSH!
+
 ## Operation
 `rmirro.py` creates a folder on your computer, by default named `remarkable/`, from which you can read and upload documents to your reMarkable.
 Documents and folders that have been added, modified or removed on the reMarkable or computer since the last run are transferred to or removed from the other device.
