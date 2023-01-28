@@ -194,8 +194,11 @@ class RemarkableFile(AbstractFile):
         else:
             path = self.parent().path() + "/" + self.name()
 
-        if self.is_file() and not path.endswith(".pdf"):
-            path += ".pdf" # add extension (to notes) if TODO: .pdf only?
+        # Files with no extension: RM notes (to be regarded as PDFs after export)
+        # Files with .pdf extension: (annotated) PDFs
+        # Files with .epub extension: (annotated) EPUBs
+        if self.is_file() and not (path.endswith(".pdf") or path.endswith(".epub")):
+            path += ".pdf" # add PDF extension to to-be-exported notes
 
         return path
 
@@ -249,7 +252,6 @@ class RemarkableFile(AbstractFile):
 class ComputerFile(AbstractFile):
     def __init__(self, path):
         self._path = path
-        assert self.extension() in ("", ".pdf"), "can only handle directories and PDFs" # TODO: epub
 
     def exists(self):
         return os.path.exists(self.path())
@@ -260,8 +262,7 @@ class ComputerFile(AbstractFile):
     def name(self):
         filename = os.path.basename(self.path()) # e.g. "document.pdf"
         name, ext = os.path.splitext(filename) # e.g. ("document", ".pdf")
-        assert ext in ["", ".pdf"], f"Unknown filetype: {ext}" # TODO: ?, epub
-        return name
+        return name # without extension
 
     def extension(self):
         _, ext = os.path.splitext(self.path())
@@ -305,7 +306,11 @@ class ComputerFile(AbstractFile):
 
     # TODO: can use RM web interface for uploading, if don't need to make new directories?
     def upload(self):
+        if self.is_file() and self.extension() not in (".pdf", ".epub"):
+            panic(f"Extension of {self.path()} is not PDF or EPUB")
+
         # TODO: what to do if this is a *note* on the remarkable?
+
         rm_file = self.on_remarkable()
 
         if rm_file:
@@ -334,7 +339,7 @@ class ComputerFile(AbstractFile):
         rm.write_metadata(id, metadata)
         rm.write_content(id, {}) # this file is required for RM to list file properly
         if metadata["type"] == "DocumentType":
-            rm.upload_file(self.path(), f"{id}.pdf")
+            rm.upload_file(self.path(), f"{id}{self.extension()}")
 
     def remove(self):
         if self.is_directory():
@@ -409,6 +414,7 @@ if __name__ == "__main__":
 
     # list commands and prompt for proceeding
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
+        # TODO: print warnings if overwriting?
         print(f"? ({i+1}/{len(commands)}) {action} {path}")
 
     if len(commands) == 0:
