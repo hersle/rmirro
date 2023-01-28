@@ -1,5 +1,7 @@
 # rmirro
 
+![Screenshot](screenshot.png)
+
 `rmirro.py` is a Python script that maintains a live mirror image
 of your reMarkable's files in a folder on your computer that directly matches its file structure.
 Documents on the reMarkable are downloaded as PDFs to this folder,

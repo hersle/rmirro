@@ -416,7 +416,7 @@ if __name__ == "__main__":
 
     # list commands and prompt for proceeding
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        print(f"? ({i+1}/{len(commands)}) {action} {path}")
+        print(f"? ({i+1}/{len(commands)}) {action}: {path}")
 
     if len(commands) == 0:
         logger.log("Finished (everything was up-to-date)")
@@ -431,7 +431,7 @@ if __name__ == "__main__":
     # execute commands
     rm_needs_restart = False
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        logger.log(f"({i+1}/{len(commands)}) {action} {path}")
+        logger.log(f"({i+1}/{len(commands)}) {action}: {path}")
         if action == "PULL":
             rm_file.download()
         elif action == "PUSH":
