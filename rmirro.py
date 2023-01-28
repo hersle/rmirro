@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser(
     description = "Mirror PDFs of documents on a Remarkable, and upload documents to it, all from a native file system folder"
 )
 parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
+parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, etc.
 # TODO: let user exclude certain files. how would this pan out if they are suddenly included again?
@@ -22,7 +23,10 @@ def panic(error):
     logger.log("ERROR: " + error)
     exit()
 
-def pc_run(cmd, exiterror=None):
+def pc_run(cmd, exiterror=None, verbose=None):
+    verbose = getattr(args, "verbose") if verbose is None else False
+    if verbose:
+        print("Executing shell command:", cmd)
     status, output = subprocess.getstatusoutput(cmd)
     if status != 0 and exiterror:
         panic(exiterror)
@@ -39,7 +43,7 @@ class Logger:
         cmd += f" --replace-id={self.id}" if self.id else ""
         cmd += f" --app-name=rmirro --urgency={urgency} --icon={icon}"
         cmd += f" \"{title}\"" + f" \"{text}\""
-        output = pc_run(cmd)
+        output = pc_run(cmd, verbose=False)
         self.id = int(output)
 
     def log(self, text, urgency="normal"):
