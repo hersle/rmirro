@@ -16,9 +16,16 @@ parser = argparse.ArgumentParser(
 parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, etc.
+# TODO: let user exclude certain files. how would this pan out if they are suddenly included again?
 
-def pc_run(cmd):
-    output = subprocess.getoutput(cmd)
+def panic(error):
+    logger.log("ERROR: " + error)
+    exit()
+
+def pc_run(cmd, exiterror=None):
+    status, output = subprocess.getstatusoutput(cmd)
+    if status != 0 and exiterror:
+        panic(exiterror)
     return output
 
 class Logger:
@@ -49,9 +56,10 @@ class Remarkable:
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
 
         # "ping" to check if we do indeed have a remarkable connected
-        assert self.run("uname -n") == "reMarkable"
+        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable":
+            panic("Could not verify that SSH host {self.ssh_name} is a reMarkable")
 
-        self.ssh_ip = pc_run(f"ssh {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
+        self.ssh_ip = pc_run(f"ssh -o ConnectTimeout=1 {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
         logger.log(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
         self.download_metadata()
@@ -121,8 +129,8 @@ class Remarkable:
     def write_content(self, id, content):
         self.write_json(f"{id}.content", content)
 
-    def run(self, cmd):
-        return pc_run(f"ssh {self.ssh_name} {cmd}")
+    def run(self, cmd, exiterror=None):
+        return pc_run(f"ssh -o ConnectTimeout=1 {self.ssh_name} {cmd}", exiterror=exiterror)
 
     def restart(self):
         print("Restarting remarkable interface")
@@ -226,7 +234,10 @@ class RemarkableFile(AbstractFile):
             os.makedirs(path_local, exist_ok=True) # make directories ourselves
         else: # is file
             url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
-            urllib.request.urlretrieve(url, filename=path_local)
+            try:
+                urllib.request.urlretrieve(url, filename=path_local) # TODO: offer alternatives to RM's rendering, would relax USB web interface requirement
+            except Exception as e:
+                panic(f"Could not download {url} from the reMarkable USB web interface")
             atime = self.last_accessed() # s
             mtime = self.last_modified() # s
             os.utime(path_local, (atime, mtime)) # sync with access/modification times from RM
@@ -238,7 +249,7 @@ class RemarkableFile(AbstractFile):
 class ComputerFile(AbstractFile):
     def __init__(self, path):
         self._path = path
-        assert self.extension() in ("", ".pdf"), "can only handle directories and PDFs"
+        assert self.extension() in ("", ".pdf"), "can only handle directories and PDFs" # TODO: epub
 
     def exists(self):
         return os.path.exists(self.path())
@@ -249,7 +260,7 @@ class ComputerFile(AbstractFile):
     def name(self):
         filename = os.path.basename(self.path()) # e.g. "document.pdf"
         name, ext = os.path.splitext(filename) # e.g. ("document", ".pdf")
-        assert ext in ["", ".pdf"], f"Unknown filetype: {ext}" # TODO: ?
+        assert ext in ["", ".pdf"], f"Unknown filetype: {ext}" # TODO: ?, epub
         return name
 
     def extension(self):
@@ -290,7 +301,6 @@ class ComputerFile(AbstractFile):
         return rm_path
 
     def on_remarkable(self):
-        # TODO: don't create new RM root file
         return rm_root.find(self.path_on_remarkable())
 
     # TODO: can use RM web interface for uploading, if don't need to make new directories?
