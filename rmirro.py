@@ -59,7 +59,7 @@ class Remarkable:
         if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable":
             panic("Could not verify that SSH host {self.ssh_name} is a reMarkable")
 
-        self.ssh_ip = pc_run(f"ssh -o ConnectTimeout=1 {self.ssh_name} -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
+        self.ssh_ip = pc_run(f"ssh -o ConnectTimeout=1 \"{self.ssh_name}\" -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
         logger.log(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
         self.download_metadata()
@@ -95,7 +95,7 @@ class Remarkable:
         if os.path.exists(self.raw_dir_local):
             shutil.rmtree(self.raw_dir_local)
         os.makedirs(self.raw_dir_local)
-        pc_run(f"rsync -az {self.ssh_name}:{self.raw_dir_remote}/*.metadata {self.raw_dir_local}/") # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
+        pc_run(f"rsync -az \"{self.ssh_name}:{self.raw_dir_remote}/*.metadata\" \"{self.raw_dir_local}/\"") # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -108,7 +108,7 @@ class Remarkable:
         return self.read_json(f"{id}.metadata")
 
     def upload_file(self, src_path, dest_name):
-        pc_run(f"scp \"{src_path}\" \"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}\"") # TODO: avoid escaping " with proper list use of subprocess
+        pc_run(f"scp \"{src_path}\" \"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}\"")
 
     def write_file(self, filename, content):
         # write locally
@@ -130,7 +130,7 @@ class Remarkable:
         self.write_json(f"{id}.content", content)
 
     def run(self, cmd, exiterror=None):
-        return pc_run(f"ssh -o ConnectTimeout=1 {self.ssh_name} {cmd}", exiterror=exiterror)
+        return pc_run(f"ssh -o ConnectTimeout=1 \"{self.ssh_name}\" \"{cmd}\"", exiterror=exiterror)
 
     def restart(self):
         print("Restarting remarkable interface")
@@ -138,7 +138,7 @@ class Remarkable:
 
 class AbstractFile:
     def list(self):
-        for child in self.children(): # TODO: make use pythonic for ... in self:
+        for child in self.children():
             print(child.path())
             child.list()
 
@@ -155,6 +155,7 @@ class RemarkableFile(AbstractFile):
 
     def __init__(self, id=""):
         self.is_root = id == ""
+        self.is_trash = id == "trash"
         self.id = id
         if not self.trashed() and self.path() not in self.fullpath_to_id_cache:
             self.fullpath_to_id_cache[self.path()] = self.id # cache
@@ -163,11 +164,12 @@ class RemarkableFile(AbstractFile):
         return rm.read_metadata(self.id)
 
     def trashed(self):
-        # TODO: if file is trashed, or its parent is trashed
-        if self.id == "trash": # TODO: make is_trash() and is_root()
+        if self.is_trash:
             return True
         if self.is_root:
             return False
+        # On RM, a file can be marked as trashed even though its parent is not
+        # Override this, so that a file is trashed if its parent is
         return self.parent().trashed()
 
     def children(self):
@@ -218,7 +220,7 @@ class RemarkableFile(AbstractFile):
         return self.is_root or self.metadata()["type"] == "CollectionType"
 
     def is_file(self):
-        # TODO: verify that it is equivalent to not is_directory()
+        # TODO: verify that it is equivalent to not is_directory()?
         return not self.is_root and self.metadata()["type"] == "DocumentType"
 
     def last_modified(self):
@@ -309,8 +311,6 @@ class ComputerFile(AbstractFile):
         if self.is_file() and self.extension() not in (".pdf", ".epub"):
             panic(f"Extension of {self.path()} is not PDF or EPUB")
 
-        # TODO: what to do if this is a *note* on the remarkable?
-
         rm_file = self.on_remarkable()
 
         if rm_file:
@@ -332,7 +332,7 @@ class ComputerFile(AbstractFile):
                 metadata["type"] = "CollectionType"
             else: # is file
                 metadata["type"] = "DocumentType"
-                metadata["lastOpened"] = str(self.last_accessed() * 1000) # only files have this property, # TODO: what to use here?
+                metadata["lastOpened"] = str(self.last_accessed() * 1000) # only files have this property
 
         metadata["lastModified"] = str(self.last_modified() * 1000)
 
@@ -349,14 +349,13 @@ class ComputerFile(AbstractFile):
 
 def sync_action_and_reason(rm_file, pc_file):
     if rm_file and not pc_file:
-        return "PULL", "only on RM" # file does not exist on computer, so pull it (for safety, nothing is ever deleted from the remarkable, TODO: change?)
+        return "PULL", "only on RM" # file does not exist on computer, so pull it (for safety, nothing is ever deleted from the remarkable)
 
     if pc_file:
         if rm_file and rm_file.is_file(): # if the file is a directory, there is nothing worth updating
-            diff = rm_file.last_modified() - pc_file.last_modified()
-            if diff > 0:
+            if rm_file.last_modified() > pc_file.last_modified():
                 return "PULL", f"newer on RM"
-            elif diff < 0:
+            elif rm_file.last_modified() < pc_file.last_modified():
                 return "PUSH", f"newer on PC"
         elif not rm_file:
             # file/directory only on PC: was it removed from RM, or created on PC after last sync?
@@ -366,8 +365,7 @@ def sync_action_and_reason(rm_file, pc_file):
             # In this case, we want to compare the creation time
             # This SHOULD NOT BE DONE if the file exists on the remarkable, because then downloaded files can be uploaded back!
             pc_time = pc_file.created() if pc_file.is_directory() or pc_file.created() > pc_file.last_modified() else pc_file.last_modified()
-            diff = rm.last_sync() - pc_time
-            if diff < 0:
+            if rm.last_sync() < pc_time:
                 return "PUSH", f"added on PC"
             else:
                 return "DROP", f"deleted on RM"
@@ -380,7 +378,7 @@ if __name__ == "__main__":
     ssh_name = getattr(args, "ssh-name")
 
     logger = Logger()
-    rm = Remarkable(ssh_name) # TODO: avoid this global variable
+    rm = Remarkable(ssh_name)
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
 
@@ -414,7 +412,6 @@ if __name__ == "__main__":
 
     # list commands and prompt for proceeding
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        # TODO: print warnings if overwriting?
         print(f"? ({i+1}/{len(commands)}) {action} {path}")
 
     if len(commands) == 0:
