@@ -14,8 +14,6 @@ parser = argparse.ArgumentParser(
     description = "Mirror PDFs of documents on a Remarkable, and upload documents to it, all from a native file system folder"
 )
 parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
-parser.add_argument("--dry-run", action="store_true")
-parser.add_argument("--confirm", action="store_true")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, etc.
 
@@ -85,6 +83,7 @@ class Remarkable:
                 yield id
 
     def download_metadata(self):
+        logger.log("Downloading metadata")
         if os.path.exists(self.raw_dir_local):
             shutil.rmtree(self.raw_dir_local)
         os.makedirs(self.raw_dir_local)
@@ -360,7 +359,16 @@ def sync_action_and_reason(rm_file, pc_file):
 
     return "SKIP", "up-to-date"
 
-def sync(dry_run):
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    ssh_name = getattr(args, "ssh-name")
+
+    logger = Logger()
+    rm = Remarkable(ssh_name) # TODO: avoid this global variable
+    rm_root = RemarkableFile()
+    pc_root = ComputerFile(rm.processed_dir_local)
+
     def iterate_files():
         for rm_file in rm_root.traverse():
             pc_file = rm_file.on_computer()
@@ -370,67 +378,57 @@ def sync(dry_run):
             if not rm_file: # already processed files on RM in last loop
                 yield (rm_file, pc_file)
 
+    logger.log("Comparing files and collecting commands")
     commands = []
     for rm_file, pc_file in iterate_files():
         action, reason = sync_action_and_reason(rm_file, pc_file)
+        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
         if action != "SKIP":
-            commands.append((action, reason, rm_file, pc_file))
+            commands.append((action, reason, path, rm_file, pc_file))
 
     # sort commands, so that
     # * pushes happen first, then pulls, then drops
     # * push/pull handles shallow files first (creating directories as going down the tree),
     # * drop handles deep files first (deleting directories going up the tree, since non-empty directories should not be deleted)
     def key(command):
-        action, reason, rm_file, pc_file = command
+        action, reason, path, rm_file, pc_file = command
         key1 = ["PULL", "PUSH", "DROP"].index(action) # pull first, then push, then drop
-        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
         key2 = -len(path) if action == "DROP" else +len(path)  # drop sub-files first (cannot remove non-empty directories)
         return (key1, key2)
     commands.sort(key=key)
 
-    # print and perform commands
-    rm_needs_restart = False
-    for action, reason, rm_file, pc_file in commands:
-        prefix = "DRY-" if dry_run else ""
-        path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
-        logger.log(prefix + f"{action} ({reason}): {path}", notify=False)
-        if not dry_run:
-            if action == "PULL":
-                rm_file.download()
-            elif action == "PUSH":
-                pc_file.upload()
-            elif action == "DROP":
-                pc_file.remove()
-            rm_needs_restart = rm_needs_restart or action == "PUSH"
+    # list commands and prompt for proceeding
+    for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
+        print(f"? ({i+1}/{len(commands)}) {action} {path}")
 
-    if not dry_run:
-        rm.write_last_sync()
-        if rm_needs_restart:
-            rm.restart()
+    if len(commands) == 0:
+        logger.log("Finished (everything was up-to-date)")
+        exit()
+    else:
+        logger.log("Awaiting confirmation")
+        answer = input(f"Execute these {len(commands)} commands (y/n)? ")
+        if answer != "y": # accept nothing but a resounding yes
+            logger.log("Aborted (no changes have been made)")
+            exit()
+
+    # execute commands
+    rm_needs_restart = False
+    for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
+        logger.log(f"({i+1}/{len(commands)}) {action} {path}")
+        if action == "PULL":
+            rm_file.download()
+        elif action == "PUSH":
+            pc_file.upload()
+        elif action == "DROP":
+            pc_file.remove()
+        rm_needs_restart = rm_needs_restart or action == "PUSH"
+
+    rm.write_last_sync()
+    if rm_needs_restart:
+        rm.restart()
 
     actions = [command[0] for command in commands]
-    npull = actions.count("PULL") if not dry_run else 0
-    npush = actions.count("PUSH") if not dry_run else 0
-    ndrop = actions.count("DROP") if not dry_run else 0
-    logger.log(f"Finished pulling {npull}, pushing {npush} and dropping {ndrop} files")
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    assert not (getattr(args, "confirm") and getattr(args, "dry_run")), "ambiguous use of --confirm and --dry-run"
-
-    ssh_name = getattr(args, "ssh-name")
-    confirm = getattr(args, "confirm")
-    dry_run = getattr(args, "dry_run") or confirm
-
-    logger = Logger()
-    rm = Remarkable(ssh_name) # TODO: avoid this global variable
-    rm_root = RemarkableFile()
-    pc_root = ComputerFile(rm.processed_dir_local)
-
-    sync(dry_run)
-
-    if confirm: # show user changes that will be made (in dry mode), then ask to proceed (in "wet mode")
-        logger.log("Waiting for user confirmation")
-        answer = input("Proceed with these operations (y/n)? ")
-        if answer == "y":
-            sync(False)
+    npull = actions.count("PULL")
+    npush = actions.count("PUSH")
+    ndrop = actions.count("DROP")
+    logger.log(f"Finished (pulled {npull}, pushed {npush} and dropped {ndrop} files)")
