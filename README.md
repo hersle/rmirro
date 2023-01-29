@@ -26,9 +26,9 @@ giving you the flexibility to build your workflow with whichever file explorer, 
 
 During synchronization, a file is either
 
-* **pulled** from the reMarkable (RM),
-* **pushed** to the reMarkable or
-* **dropped** (removed, or "forgotten") from the *computer* (PC),
+* **pulled** from the reMarkable (RM) to the computer (PC),
+* **pushed** from the computer to the reMarkable, or
+* **dropped** (removed or "forgotten") from the computer,
 
 depending on where it is present and when it was last modified:
 
