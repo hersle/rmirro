@@ -24,11 +24,11 @@ giving you the flexibility to build your workflow with whichever file explorer, 
 4. Run `./rmirro.py` again to pull changes and push documents added since last time (this skips up-to-date files and runs faster).
 5. Go to 3.
 
-During synchronization, a file is
+During synchronization, a file is either
 
 * **pulled** from the reMarkable (RM),
-* **pushed** to the computer (PC) or
-* **dropped** from the *computer*,
+* **pushed** to the reMarkable or
+* **dropped** (removed, or "forgotten") from the *computer* (PC),
 
 depending on where it is present and when it was last modified:
 
@@ -37,10 +37,13 @@ depending on where it is present and when it was last modified:
 | 🟢 **On RM**     | **Pull**/**push** if newer on RM/PC               | **Pull**         |
 | 🔴 **Not on RM** | **Push**/**drop** if added after/before last sync |                  |
 
-The program presents its intentions and prompts for confirmation before executing impactful commands.
-However, it is a hobby project with 0 or more bugs, so *beware that it has the potential to overwrite and delete files on your reMarkable and computer!*
+Before the program proceeds with any impactful actions, it presents its intentions and prompts for confirmation.
+However, it is a hobby project with 0 or more bugs,
+so *beware that it has the potential to unexpectedly overwrite and delete files on your reMarkable and computer, and that I take no responsibility if it does!*
+[Back up your reMarkable](https://remarkablewiki.com/tech/file_transfer#making_local_backups) to mitigate this!
 
 ### Auto-synchronize when the reMarkable is connected by USB cable
 
-Run `rm_sync_on_connect_setup.sh` to install an [udev](https://en.wikipedia.org/wiki/Udev) rule on your system (requires root access)
-that automatically runs `rmirro.py` when the reMarkable is connected to your computer with a USB cable.
+This repository contains an [udev](https://en.wikipedia.org/wiki/Udev) rule
+that can automatically run `rmirro.py` when you connect your reMarkable to the computer with a USB cable.
+Run `rm_sync_on_connect_setup.sh` to install it (requires root access).
