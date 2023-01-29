@@ -235,16 +235,23 @@ class RemarkableFile(AbstractFile):
     def last_accessed(self):
         return 0 if self.is_root else int(self.metadata()["lastOpened"]) // 1000 # s
 
-    def download(self):
+    def download(self, method="usb"):
         path_local = rm.processed_dir_local + "/" + self.path()
         if self.is_directory():
             os.makedirs(path_local, exist_ok=True) # make directories ourselves
         else: # is file
-            url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
-            try:
-                urllib.request.urlretrieve(url, filename=path_local) # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl), would relax USB requirements and allow everything over SSH
-            except Exception as e:
-                panic(f"Could not download {url} from the reMarkable USB web interface")
+            if method == "usb":
+                url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
+                try:
+                    urllib.request.urlretrieve(url, filename=path_local)
+                except Exception as e:
+                    panic(f"Could not download {url} from the reMarkable USB web interface")
+            else:
+                # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl),
+                # would relax USB requirements and allow everything over SSH
+                raise f"Unknown download method: \"{method}\""
+
+            # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
             mtime = self.last_modified() # s
             os.utime(path_local, (atime, mtime)) # sync with access/modification times from RM
@@ -309,6 +316,7 @@ class ComputerFile(AbstractFile):
         return rm_root.find(self.path_on_remarkable())
 
     # TODO: can use RM web interface for uploading, if don't need to make new directories?
+    # then it would not be necessary to restart the RM interface
     def upload(self):
         if self.is_file() and self.extension() not in (".pdf", ".epub"):
             panic(f"Extension of {self.path()} is not PDF or EPUB")
@@ -373,7 +381,6 @@ def sync_action_and_reason(rm_file, pc_file):
                 return "DROP", f"deleted on RM"
 
     return "SKIP", "up-to-date"
-
 
 if __name__ == "__main__":
     args = parser.parse_args()
