@@ -21,7 +21,7 @@ parser.add_argument("-v", "--verbose", action="store_true", help="print executed
 
 def panic(error):
     logger.log("ERROR: " + error)
-    exit()
+    exit(1)
 
 def pc_run(cmd, exiterror=None, verbose=None):
     verbose = getattr(args, "verbose") if verbose is None else False
