@@ -2,51 +2,45 @@
 
 ![Screenshot](screenshot.png)
 
-`rmirro.py` is a Python script that maintains a live mirror image
-of your reMarkable's files in a folder on your computer that directly matches its file structure.
-Documents on the reMarkable are downloaded as PDFs to this folder,
-and documents put in the folder are uploaded to the reMarkable.
+`rmirro.py` **synchronizes files between your reMarkable and computer in both directions** without cloud access.
+It **pulls PDFs** of your Remarkable's documents to a folder on your computer,
+and **pushes PDFs and EPUBs** that you add to this folder back to the Remarkable.
+Effectively, it **integrates your reMarkable with your computer's native file system,**
+giving you the flexibility to build your workflow with whichever file explorer, document viewer and additional tools you want.
 
-"rmirro" is what you get by shifting the characters in "mirror" cyclically one step to the right.
+(`rmirro` is what you get by shifting the characters in `mirror` cyclically one step to the right.)
 
 ## Requirements
-`rmirro.py` reads your reMarkable's file structure and downloads and uploads files to it over SSH and USB.
-* The reMarkable must be connected to your computer with a USB cable.
-* The reMarkable's [USB web interface](https://remarkablewiki.com/tech/webinterface) must be enabled.
-* The reMarkable must be accessible through [passwordless SSH login](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) (by running e.g. `ssh remarkable`).
 
-**TODO:** Relax the USB requirements by allowing use of some third-party script that can render the reMarkable documents *on the computer*, so everything can function over (wired or wireless) SSH!
+* [Passwordless SSH access](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) to your reMarkable with `ssh remarkable`.
+* Access to the [Remarkable's USB web interface](https://remarkablewiki.com/tech/webinterface)
+  ~~**or** a command line program on your computer that converts raw reMarkable files to PDF (**TODO**)~~.
 
-## Operation
-`rmirro.py` creates a folder on your computer, by default named `remarkable/`, from which you can read and upload documents to your reMarkable.
-Documents and folders that have been added, modified or removed on the reMarkable or computer since the last run are transferred to or removed from the other device.
-More specifically, the program traverses files and folders on both the reMarkable (RM) and the computer (PC), and takes the following actions depending on where they are present and when they were last modified:
+## Usage and operation
 
-|                  | 🟢 **On PC**                                  | 🔴 **Not on PC** |
-|------------------|-----------------------------------------------|------------------|
-| 🟢 **On RM**     | Download/upload if newer on RM/PC             | Download         |
-| 🔴 **Not on RM** | Upload/remove if added after/before last sync |                  |
+1. Run `git clone https://github.com/hersle/rmirro.git` to download this program.
+2. Run `./rmirro.py` to pull *all* your reMarkable's documents into `./remarkable/` (this can take a while).
+3. Work on your reMarkable, and add PDFs and EPUBs to `./remarkable/`.
+4. Run `./rmirro.py` again to pull changes and push documents added since last time (this skips up-to-date files and runs faster).
+5. Go to 3.
 
-Note the "asymmetry" of the two cells where the file is only on one device:
-files are removed from PC if they are deleted from RM (this is the interpretation of "remove if added before last sync"),
-but files are not deleted from RM if they are deleted on PC, to prevent accidental file loss.
-However, files on RM can be *overwritten* by files uploaded from PC!
+During synchronization, a file is
 
-## Auto-synchronise when connecting USB cable
+* **pulled** from the reMarkable (RM),
+* **pushed** to the computer (PC) or
+* **dropped** from the *computer*,
+
+depending on where it is present and when it was last modified:
+
+|                  | 🟢 **On PC**                                      | 🔴 **Not on PC** |
+|------------------|:-------------------------------------------------:|:----------------:|
+| 🟢 **On RM**     | **Pull**/**push** if newer on RM/PC               | **Pull**         |
+| 🔴 **Not on RM** | **Push**/**drop** if added after/before last sync |                  |
+
+The program presents its intentions and prompts for confirmation before executing impactful commands.
+However, it is a hobby project with 0 or more bugs, so *beware that it has the potential to overwrite and delete files on your reMarkable and computer!*
+
+### Auto-synchronize when the reMarkable is connected by USB cable
 
 Run `rm_sync_on_connect_setup.sh` to install an [udev](https://en.wikipedia.org/wiki/Udev) rule on your system (requires root access)
-that automatically runs `rmirro.py` when the reMarkable is connected to your computer.
-
-## Motivation (and opinions)
-
-I created this script because
-* I want my reMarkable *integrated with my computer's native file system*, **not** available only through some cloud solution or additional program.
-* I want to read my reMarkable files as *PDFs* in whichever PDF viewer *I prefer*, **not** through some special viewer in a cloud solution or special program, or after rendering them with third-party program.
-* I want to upload (multiple) PDFs to my reMarkable by dropping them in a folder on my computer, **not** by uploading them (one by one) through a web interface or special program.
-* I want to retrieve annotated PDFs by opening the same file on my computer that I used to upload them in the first place.
-
-## Disclaimer
-
-The program prompts the user for confirmation before proceeding and executing operations.
-**However, it can potentially overwrite or delete files on your computer or reMarkable.**
-I do not guarantee that it works as expected, so back up your data and use it at your own risk!
+that automatically runs `rmirro.py` when the reMarkable is connected to your computer with a USB cable.
