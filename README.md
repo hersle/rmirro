@@ -24,6 +24,8 @@ giving you the flexibility to build your workflow with whichever file explorer, 
 4. Run `./rmirro.py` again to pull changes and push documents added since last time (this skips up-to-date files and runs faster).
 5. Go to 3.
 
+## File operations
+
 During synchronization, a file is either
 
 * **pulled** from the reMarkable (RM) to the computer (PC),
