@@ -99,7 +99,8 @@ class Remarkable:
         if os.path.exists(self.raw_dir_local):
             shutil.rmtree(self.raw_dir_local)
         os.makedirs(self.raw_dir_local)
-        pc_run(f"rsync -az \"{self.ssh_name}:{self.raw_dir_remote}/*.metadata\" \"{self.raw_dir_local}/\"") # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
+        pc_run(f"rsync -az \"{self.ssh_name}:{self.raw_dir_remote}/*.metadata\" \"{self.raw_dir_local}/\"")
+        # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -164,6 +165,9 @@ class RemarkableFile(AbstractFile):
         if not self.trashed() and self.path() not in self.fullpath_to_id_cache:
             self.fullpath_to_id_cache[self.path()] = self.id # cache
 
+        # verify this is a file XOR a directory (to make sure our logic is consistent)
+        assert self.is_file() != self.is_directory(), f"reMarkable file \"{self.id}\" is not a file XOR a directory"
+
     def metadata(self):
         return rm.read_metadata(self.id)
 
@@ -224,18 +228,13 @@ class RemarkableFile(AbstractFile):
         return self.is_root or self.metadata()["type"] == "CollectionType"
 
     def is_file(self):
-        # TODO: verify that it is equivalent to not is_directory()?
         return not self.is_root and self.metadata()["type"] == "DocumentType"
 
     def last_modified(self):
-        if self.is_root:
-            return 0 # TODO: valid?
-        return int(self.metadata()["lastModified"]) // 1000 # s
+        return 0 if self.is_root else int(self.metadata()["lastModified"]) // 1000 # s
 
     def last_accessed(self):
-        if self.is_root:
-            return 0 # TODO: valid?
-        return int(self.metadata()["lastOpened"]) // 1000 # s
+        return 0 if self.is_root else int(self.metadata()["lastOpened"]) // 1000 # s
 
     def download(self):
         path_local = rm.processed_dir_local + "/" + self.path()
