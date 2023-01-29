@@ -35,7 +35,7 @@ depending on where it is present and when it was last modified:
 |                  | **On PC** 🟢                                      | **Not on PC** 🔴 |
 |:----------------:|:-------------------------------------------------:|:----------------:|
 | **On RM** 🟢     | **Pull**/**push** if newer on RM/PC               | **Pull**         |
-| **Not on RM** 🔴 | **Push**/**drop** if added after/before last sync |       --         |
+| **Not on RM** 🔴 | **Push**/**drop** if added after/before last sync |         —        |
 
 Before the program proceeds with any impactful actions, it presents its intentions and prompts for confirmation.
 However, it is a hobby project with 0 or more bugs,
