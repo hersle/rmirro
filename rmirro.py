@@ -96,11 +96,10 @@ class Remarkable:
 
     def download_metadata(self):
         logger.log("Downloading metadata")
-        if os.path.exists(self.raw_dir_local):
-            shutil.rmtree(self.raw_dir_local)
-        os.makedirs(self.raw_dir_local)
-        pc_run(f"rsync -az \"{self.ssh_name}:{self.raw_dir_remote}/*.metadata\" \"{self.raw_dir_local}/\"")
-        # TODO: figure out how to make rsync make exact mirror of dest dir, removing files in local dir. it screws up when using *.metadata wildcards and --delete
+
+        # download/update local storage of .metadata files,
+        # deleting any files on PC that are no longer on RM
+        pc_run(f"rsync -az --delete-excluded --include=\"*.metadata\" --exclude=\"*\" \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.raw_dir_local}/\"")
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
