@@ -11,9 +11,9 @@ import shutil
 
 parser = argparse.ArgumentParser(
     prog = "rmirro",
-    description = "Mirror PDFs of documents on a Remarkable, and upload documents to it, all from a native file system folder"
+    description = "Synchronise reMarkable with local directory \"[name]/\"",
 )
-parser.add_argument("ssh-name", type=str, nargs="?", default="remarkable")
+parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, etc.
@@ -384,7 +384,7 @@ def sync_action_and_reason(rm_file, pc_file):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    ssh_name = getattr(args, "ssh-name")
+    ssh_name = getattr(args, "name")
 
     logger = Logger()
     rm = Remarkable(ssh_name)
