@@ -17,8 +17,9 @@ parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH
 parser.add_argument("-r", "--renderer", type=str, default="./render_usb.py", metavar="ex", help="path to an executable such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: ./render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
-# TODO: --pull-only, --push-only, etc.
-# TODO: let user exclude certain files. how would this pan out if they are suddenly included again?
+# TODO: --pull-only, --push-only, --backup, etc?
+# TODO: let user exclude certain files? how would this pan out if they are suddenly included again?
+# TODO: build symlink directory structure by tags?
 
 def panic(error):
     logger.log("ERROR: " + error)

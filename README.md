@@ -12,7 +12,7 @@ letting you build your own workflow with your preferred file explorer, document 
 
 * [Passwordless SSH access](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) to your reMarkable with `ssh remarkable`.
 * Access to reMarkable's official PDF renderer through its [USB web interface](https://remarkablewiki.com/tech/webinterface)
-  **or** a third-party PDF renderer of raw reMarkable files on your computer, like [maxio](https://github.com/hersle/maxio/tree/overlay).
+  **or** any third-party PDF renderer of raw reMarkable files on your computer, like [maxio](https://github.com/hersle/maxio/tree/overlay).
 
 ## Usage and operation
 
