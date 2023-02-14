@@ -39,16 +39,15 @@ depending on where it is present and when it was last modified:
 | deleted on RM,                                   | delete it on PC, too.                                   |
 | deleted on PC,                                   | pull it to PC again (delete it on RM to get rid of it). |
 
-Before the program proceeds with any impactful actions, it presents its intentions and prompts for confirmation.
-However, it is a hobby project with 0 or more bugs,
-so *beware that it has the potential to unexpectedly overwrite and delete files on your reMarkable and computer, and that I take no responsibility if it does!*
-[Back up your reMarkable](https://remarkablewiki.com/tech/file_transfer#making_local_backups) to mitigate this!
+Before proceeding with any impactful actions, the program presents its intentions and prompts for confirmation.
+Beware that the program may have bugs and has the potential to overwrite and delete files on your reMarkable and computer,
+so *prepare for unforeseen consequences and [back up your reMarkable](https://remarkablewiki.com/tech/file_transfer#making_local_backups) to mitigate this!*
 
 ### Auto-synchronize when the reMarkable is connected by USB cable
 
 This repository contains an [udev](https://en.wikipedia.org/wiki/Udev) rule
 that can automatically run `rmirro.py` when you connect your reMarkable to the computer with a USB cable.
-If you have root access, you can run `rm_sync_on_connect_setup.sh` to install it.
+To install it, run `rm_sync_on_connect_setup.sh` with root access.
 
 ---
 
