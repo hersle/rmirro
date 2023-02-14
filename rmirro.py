@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser(
     description = "Synchronise reMarkable with local directory \"[name]/\"",
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
+parser.add_argument("-r", "--renderer", type=str, default="./render_usb.py", metavar="ex", help="path to an executable such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: ./render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, etc.
@@ -235,21 +236,15 @@ class RemarkableFile(AbstractFile):
     def last_accessed(self):
         return 0 if self.is_root else int(self.metadata()["lastOpened"]) // 1000 # s
 
-    def download(self, method="usb"):
+    def download(self):
         path_local = rm.processed_dir_local + "/" + self.path()
         if self.is_directory():
             os.makedirs(path_local, exist_ok=True) # make directories ourselves
         else: # is file
-            if method == "usb":
-                url = f"http://{rm.ssh_ip}/download/{self.id}/placeholder"
-                try:
-                    urllib.request.urlretrieve(url, filename=path_local)
-                except Exception as e:
-                    panic(f"Could not download {url} from the reMarkable USB web interface")
-            else:
-                # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl),
-                # would relax USB requirements and allow everything over SSH
-                raise f"Unknown download method: \"{method}\""
+            # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl),
+            # would relax USB requirements and allow everything over SSH
+            cmd = f"{renderer} \"{self.id}\" \"{path_local}\""
+            pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
 
             # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
@@ -385,6 +380,7 @@ def sync_action_and_reason(rm_file, pc_file):
 if __name__ == "__main__":
     args = parser.parse_args()
     ssh_name = getattr(args, "name")
+    renderer = getattr(args, "renderer")
 
     logger = Logger()
     rm = Remarkable(ssh_name)
