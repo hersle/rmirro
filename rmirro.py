@@ -259,6 +259,11 @@ class RemarkableFile(AbstractFile):
             cmd = f"{DIR}/{renderer} \"{self.id}\" \"{path_local}\""
             pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
 
+            # double-check that file was downloaded
+            if not os.path.exists(path_local):
+                panic(f"Failed to render {self.path()} with {cmd}")
+
+
             # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
             mtime = self.last_modified() # s
