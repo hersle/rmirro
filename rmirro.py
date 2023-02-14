@@ -441,7 +441,7 @@ if __name__ == "__main__":
     # execute commands
     rm_needs_restart = False
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        logger.log(f"({i+1}/{len(commands)}) {action}: {path}")
+        logger.log(f"! ({i+1}/{len(commands)}) {action}: {path}")
         if action == "PULL":
             rm_file.download()
         elif action == "PUSH":
