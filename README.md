@@ -3,10 +3,10 @@
 ![Screenshot](screenshot.png)
 
 `rmirro.py` **synchronizes files between your reMarkable and computer in both directions** without cloud access.
-It **pulls PDFs** of your Remarkable's documents to a folder on your computer,
+It renders and **pulls PDFs** of your Remarkable's documents to a folder on your computer,
 and **pushes PDFs and EPUBs** that you add to this folder back to the Remarkable.
 Effectively, it **integrates your reMarkable with your computer's native file system,**
-letting you build your own workflow with your preferred file exporer, document viewer and additional tools.
+letting you build your own workflow with your preferred file explorer, document viewer and additional tools on top.
 
 ## Requirements
 
@@ -28,14 +28,16 @@ During synchronization, a file is either
 
 * **pulled** from the reMarkable (RM) to the computer (PC),
 * **pushed** from the computer to the reMarkable, or
-* **dropped** (removed or "forgotten") from the computer,
+* **dropped** (deleted or "forgotten") from the computer,
 
 depending on where it is present and when it was last modified:
 
-|                  | **On PC** 🟢                                      | **Not on PC** 🔴 |
-|:----------------:|:-------------------------------------------------:|:----------------:|
-| **On RM** 🟢     | **Pull**/**push** if newer on RM/PC               | **Pull**         |
-| **Not on RM** 🔴 | **Push**/**drop** if added after/before last sync |         —        |
+| If a file is ...                                 | then `rmirro.py` will ...                               |
+|:-------------------------------------------------|:--------------------------------------------------------|
+| added/modified on RM (more recently than on PC), | pull it to PC.                                          |
+| added/modified on PC (more recently than on RM), | push it to RM.                                          |
+| deleted on RM,                                   | delete it on PC, too.                                   |
+| deleted on PC,                                   | pull it to PC again (delete it on RM to get rid of it). |
 
 Before the program proceeds with any impactful actions, it presents its intentions and prompts for confirmation.
 However, it is a hobby project with 0 or more bugs,
