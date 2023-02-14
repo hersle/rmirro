@@ -383,6 +383,7 @@ if __name__ == "__main__":
     renderer = getattr(args, "renderer")
 
     logger = Logger()
+
     rm = Remarkable(ssh_name)
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
@@ -416,6 +417,10 @@ if __name__ == "__main__":
     commands.sort(key=key)
 
     # list commands and prompt for proceeding
+    actions = [command[0] for command in commands]
+    npull = actions.count("PULL")
+    npush = actions.count("PUSH")
+    ndrop = actions.count("DROP")
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
         print(f"? ({i+1}/{len(commands)}) {action}: {path}")
 
@@ -423,6 +428,8 @@ if __name__ == "__main__":
         logger.log("Finished (everything was up-to-date)")
         exit()
     else:
+        if npull > 0:
+            logger.log(f"Will render with {renderer}")
         logger.log("Awaiting confirmation")
         answer = input(f"Execute these {len(commands)} commands (y/n)? ")
         if answer != "y": # accept nothing but a resounding yes
@@ -445,8 +452,4 @@ if __name__ == "__main__":
     if rm_needs_restart:
         rm.restart()
 
-    actions = [command[0] for command in commands]
-    npull = actions.count("PULL")
-    npush = actions.count("PUSH")
-    ndrop = actions.count("DROP")
     logger.log(f"Finished (pulled {npull}, pushed {npush} and dropped {ndrop} files)")
