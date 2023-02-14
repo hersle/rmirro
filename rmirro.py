@@ -95,6 +95,8 @@ class Remarkable:
             if ext == ".metadata":
                 yield id
 
+    # TODO: instead download *all* raw files to do a backup while we're at it?
+    # TODO: then remote renderers could take local file path as argument, instead
     def download_metadata(self):
         logger.log("Downloading metadata")
 
