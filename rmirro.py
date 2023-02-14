@@ -24,6 +24,7 @@ parser.add_argument("-v", "--verbose", action="store_true", help="print executed
 # TODO: --pull-only, --push-only, --backup, etc?
 # TODO: let user exclude certain files? how would this pan out if they are suddenly included again?
 # TODO: build symlink directory structure by tags?
+# TODO: set --output directory
 
 def panic(error):
     logger.log("ERROR: " + error)
@@ -35,6 +36,7 @@ def pc_run(cmd, exiterror=None, verbose=None):
         print("Executing shell command:", cmd)
     status, output = subprocess.getstatusoutput(cmd)
     if status != 0 and exiterror:
+        print(output)
         panic(exiterror)
     return output
 
@@ -52,9 +54,11 @@ class Logger:
         output = pc_run(cmd, verbose=False)
         self.id = int(output)
 
-    def log(self, text, urgency="normal"):
-        print(text)
-        self.notify(text, urgency=urgency)
+    def log(self, text, urgency="normal", console=True, notification=True):
+        if console:
+            print(text)
+        if notification:
+            self.notify(text, urgency=urgency)
 
 class Remarkable:
     def __init__(self, ssh_name):
@@ -107,7 +111,8 @@ class Remarkable:
 
         # download/update local storage of .metadata files,
         # deleting any files on PC that are no longer on RM
-        pc_run(f"rsync -az --delete-excluded --include=\"*.metadata\" --exclude=\"*\" \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.raw_dir_local}/\"")
+        os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
+        pc_run(f"rsync -az --delete-excluded --include=\"*.metadata\" --exclude=\"*\" \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.raw_dir_local}/\"", exiterror="Failed downloading metadata")
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -416,6 +421,7 @@ if __name__ == "__main__":
     # * pushes happen first, then pulls, then drops
     # * push/pull handles shallow files first (creating directories as going down the tree),
     # * drop handles deep files first (deleting directories going up the tree, since non-empty directories should not be deleted)
+    # TODO: sort so one top-level dir is presented first (when doing this on a fresh dir)
     def key(command):
         action, reason, path, rm_file, pc_file = command
         key1 = ["PULL", "PUSH", "DROP"].index(action) # pull first, then push, then drop
@@ -435,10 +441,8 @@ if __name__ == "__main__":
         logger.log("Finished (everything was up-to-date)")
         exit()
     else:
-        if npull > 0:
-            logger.log(f"Will render with {renderer}")
-        logger.log("Awaiting confirmation")
-        answer = input(f"Execute these {len(commands)} commands (y/n)? ")
+        logger.log(f"Pull {npull}, push {npush} and drop {ndrop} files, rendering with {renderer}?", console=False) # print in console on next line
+        answer = input(f"Pull {npull}, push {npush} and drop {ndrop} files, rendering with {renderer} (y/n)? ")
         if answer != "y": # accept nothing but a resounding yes
             logger.log("Aborted (no changes have been made)")
             exit()
