@@ -9,12 +9,16 @@ import time
 import argparse
 import shutil
 
+# directory of this file
+# (e.g. /some/absolute/path/rmirro)
+DIR = os.path.dirname(os.path.abspath(__file__))
+
 parser = argparse.ArgumentParser(
     prog = "rmirro",
     description = "Synchronise reMarkable with local directory \"[name]/\"",
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
-parser.add_argument("-r", "--renderer", type=str, default="./render_usb.py", metavar="ex", help="path to an executable such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: ./render_usb.py - using the official USB web interface renderer)")
+parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, --backup, etc?
@@ -246,7 +250,7 @@ class RemarkableFile(AbstractFile):
         else: # is file
             # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl),
             # would relax USB requirements and allow everything over SSH
-            cmd = f"{renderer} \"{self.id}\" \"{path_local}\""
+            cmd = f"{DIR}/{renderer} \"{self.id}\" \"{path_local}\""
             pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
 
             # copy last access/modification time from RM to PC file system
