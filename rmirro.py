@@ -254,15 +254,12 @@ class RemarkableFile(AbstractFile):
         if self.is_directory():
             os.makedirs(path_local, exist_ok=True) # make directories ourselves
         else: # is file
-            # TODO: offer alternatives to RM's rendering through CLI argument (e.g. remy/rmrl),
-            # would relax USB requirements and allow everything over SSH
             cmd = f"{DIR}/{renderer} \"{self.id}\" \"{path_local}\""
             pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
 
             # double-check that file was downloaded
             if not os.path.exists(path_local):
                 panic(f"Failed to render {self.path()} with {cmd}")
-
 
             # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
