@@ -25,6 +25,7 @@ parser.add_argument("-v", "--verbose", action="store_true", help="print executed
 # TODO: let user exclude certain files? how would this pan out if they are suddenly included again?
 # TODO: build symlink directory structure by tags?
 # TODO: set --output directory
+# TODO: support renderers that output e.g. SVG instead of PDF?
 
 def panic(error):
     logger.log("ERROR: " + error)
@@ -410,24 +411,21 @@ if __name__ == "__main__":
                 yield (rm_file, pc_file)
 
     logger.log("Comparing files and collecting commands")
-    commands = []
+    commands = {"PULL": [], "PUSH": [], "DROP": []}
     for rm_file, pc_file in iterate_files():
         action, reason = sync_action_and_reason(rm_file, pc_file)
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
         if action != "SKIP":
-            commands.append((action, reason, path, rm_file, pc_file))
+            commands[action].append((action, reason, path, rm_file, pc_file))
 
-    # sort commands, so that
-    # * pushes happen first, then pulls, then drops
-    # * push/pull handles shallow files first (creating directories as going down the tree),
-    # * drop handles deep files first (deleting directories going up the tree, since non-empty directories should not be deleted)
-    # TODO: sort so one top-level dir is presented first (when doing this on a fresh dir)
+    # sort commands
     def key(command):
         action, reason, path, rm_file, pc_file = command
-        key1 = ["PULL", "PUSH", "DROP"].index(action) # pull first, then push, then drop
-        key2 = -len(path) if action == "DROP" else +len(path)  # drop sub-files first (cannot remove non-empty directories)
-        return (key1, key2)
-    commands.sort(key=key)
+        return path
+    commands["PULL"].sort(key=key, reverse=False) # pull shallow files first (creating directories before pulling their contents)
+    commands["PUSH"].sort(key=key, reverse=False) # push shallow files first (creating directories before pushing their contents)
+    commands["DROP"].sort(key=key, reverse=True)  # drop deep files first (deleting directories' contents before themselves)
+    commands = commands["PULL"] + commands["PUSH"] + commands["DROP"] # join all commands in one list (pull first, then push, then drop)
 
     # list commands and prompt for proceeding
     actions = [command[0] for command in commands]
