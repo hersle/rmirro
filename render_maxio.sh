@@ -23,5 +23,5 @@ outfile=$2
 maxio_rmtool_path=$HOME/Remarkable/maxio/rm_tools/rmtool.py # modify depending on where maxio is installed!
 
 scp -r remarkable:/home/root/.local/share/remarkable/xochitl/$uuid* /tmp/rmirro_input/ # download raw files
-$maxio_rmtool_path convert /tmp/rmirro_input/$uuid $outfile # convert raw files to PDF
+$maxio_rmtool_path convert "/tmp/rmirro_input/$uuid" "$outfile" # convert raw files to PDF
 rm -r /tmp/rmirro_input # clean up raw files
