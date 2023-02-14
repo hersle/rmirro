@@ -6,15 +6,13 @@
 It **pulls PDFs** of your Remarkable's documents to a folder on your computer,
 and **pushes PDFs and EPUBs** that you add to this folder back to the Remarkable.
 Effectively, it **integrates your reMarkable with your computer's native file system,**
-giving you the flexibility to build your workflow with whichever file explorer, document viewer and additional tools you want.
-
-(`rmirro` is what you get by shifting the characters in `mirror` cyclically one step to the right.)
+letting you build your own workflow with your preferred file exporer, document viewer and additional tools.
 
 ## Requirements
 
 * [Passwordless SSH access](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) to your reMarkable with `ssh remarkable`.
-* Access to the [Remarkable's USB web interface](https://remarkablewiki.com/tech/webinterface)
-  ~~**or** a command line program on your computer that converts raw reMarkable files to PDF (**TODO**)~~.
+* Access to reMarkable's official PDF renderer through its [USB web interface](https://remarkablewiki.com/tech/webinterface)
+  **or** a third-party PDF renderer of raw reMarkable files on your computer, like [maxio](https://github.com/hersle/maxio/tree/overlay).
 
 ## Usage and operation
 
@@ -48,4 +46,8 @@ so *beware that it has the potential to unexpectedly overwrite and delete files 
 
 This repository contains an [udev](https://en.wikipedia.org/wiki/Udev) rule
 that can automatically run `rmirro.py` when you connect your reMarkable to the computer with a USB cable.
-Run `rm_sync_on_connect_setup.sh` to install it (requires root access).
+If you have root access, you can run `rm_sync_on_connect_setup.sh` to install it.
+
+---
+
+(`rmirro` is what you get by shifting the characters in `mirror` cyclically one step to the right.)
