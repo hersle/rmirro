@@ -31,11 +31,11 @@ def panic(error):
     logger.log("ERROR: " + error)
     exit(1)
 
-def pc_run(cmd, exiterror=None, verbose=None):
-    verbose = getattr(args, "verbose") if verbose is None else False
+def pc_run(cmd, exiterror=None, capture=True):
+    verbose = getattr(args, "verbose")
     if verbose:
         print(">", subprocess.list2cmdline(cmd))
-    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8")
+    proc = subprocess.run(cmd, capture_output=capture, encoding="utf-8")
     if proc.returncode != 0 and exiterror is not None:
         print(proc.stderr)
         panic(exiterror)
@@ -53,7 +53,7 @@ class Logger:
             cmd += [f"--replace-id={self.id}"] if self.id else []
             cmd += [f"--app-name=rmirro", f"--urgency={urgency}", f"--icon={icon}"]
             cmd += [title, text]
-            output = pc_run(cmd, verbose=False)
+            output = pc_run(cmd)
             self.id = int(output)
 
     def log(self, text, urgency="normal", console=True, notification=True):
@@ -113,12 +113,12 @@ class Remarkable:
         # download/update local storage of .metadata files,
         # deleting any files on PC that are no longer on RM
         os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
-        pc_run(["rsync", "-az", "--delete-excluded", "--include=*.metadata", "--exclude=*", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.raw_dir_local}/"], exiterror="Failed downloading metadata")
+        pc_run(["rsync", "--info=progress2", "-az", "--delete-excluded", "--include=*.metadata", "--exclude=*", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.raw_dir_local}/"], exiterror="Failed downloading metadata", capture=False)
 
     def backup(self):
         logger.log(f"Backing up raw files to {self.backup_dir}")
         os.makedirs(self.backup_dir, exist_ok=True) # create directories if they do not exist
-        pc_run(["rsync", "-az", "--delete", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.backup_dir}/"], exiterror="Failed backing up raw files")
+        pc_run(["rsync", "--info=progress2", "-az", "--delete", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.backup_dir}/"], exiterror="Failed backing up raw files", capture=False)
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
