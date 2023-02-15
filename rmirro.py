@@ -34,24 +34,24 @@ def panic(error):
 def pc_run(cmd, exiterror=None, verbose=None):
     verbose = getattr(args, "verbose") if verbose is None else False
     if verbose:
-        print("Executing shell command:", cmd)
-    status, output = subprocess.getstatusoutput(cmd)
-    if status != 0 and exiterror:
-        print(output)
+        print(">", subprocess.list2cmdline(cmd))
+    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8")
+    if proc.returncode != 0 and exiterror is not None:
+        print(proc.stderr)
         panic(exiterror)
-    return output
+    return proc.stdout
 
 class Logger:
     def __init__(self):
         self.id = None
 
     def notify(self, text, urgency="normal", icon="input-tablet"):
-        title = f"Synchronising reMarkable"
-        cmd  = "notify-send"
-        cmd += " --print-id"
-        cmd += f" --replace-id={self.id}" if self.id else ""
-        cmd += f" --app-name=rmirro --urgency={urgency} --icon={icon}"
-        cmd += f" \"{title}\"" + f" \"{text}\""
+        title = f"Synchronizing reMarkable"
+        cmd  = ["notify-send"]
+        cmd += ["--print-id"]
+        cmd += [f"--replace-id={self.id}"] if self.id else []
+        cmd += [f"--app-name=rmirro", f"--urgency={urgency}", f"--icon={icon}"]
+        cmd += [title, text]
         output = pc_run(cmd, verbose=False)
         self.id = int(output)
 
@@ -72,8 +72,8 @@ class Remarkable:
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
 
         # "ping" to check if we do indeed have a remarkable connected
-        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable":
-            panic("Could not verify that SSH host {self.ssh_name} is a reMarkable")
+        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable\n":
+            panic(f"Could not verify that SSH host {self.ssh_name} is a reMarkable")
 
         logger.log(f"Connected to {self.ssh_name}")
 
@@ -112,12 +112,12 @@ class Remarkable:
         # download/update local storage of .metadata files,
         # deleting any files on PC that are no longer on RM
         os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
-        pc_run(f"rsync -az --delete-excluded --include=\"*.metadata\" --exclude=\"*\" \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.raw_dir_local}/\"", exiterror="Failed downloading metadata")
+        pc_run(["rsync", "-az", "--delete-excluded", "--include=*.metadata", "--exclude=*", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.raw_dir_local}/"], exiterror="Failed downloading metadata")
 
     def backup(self):
         logger.log(f"Backing up raw files to {self.backup_dir}")
         os.makedirs(self.backup_dir, exist_ok=True) # create directories if they do not exist
-        pc_run(f"rsync -az --delete \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.backup_dir}/\"", exiterror="Failed backing up raw files")
+        pc_run(["rsync", "-az", "--delete", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.backup_dir}/"], exiterror="Failed backing up raw files")
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -130,7 +130,7 @@ class Remarkable:
         return self.read_json(f"{id}.metadata")
 
     def upload_file(self, src_path, dest_name):
-        pc_run(f"scp \"{src_path}\" \"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}\"")
+        pc_run(["scp", src_path, f"{self.ssh_name}:{self.raw_dir_remote}/{dest_name}"])
 
     def write_file(self, filename, content):
         # write locally
@@ -152,7 +152,7 @@ class Remarkable:
         self.write_json(f"{id}.content", content)
 
     def run(self, cmd, exiterror=None):
-        return pc_run(f"ssh -o ConnectTimeout=1 \"{self.ssh_name}\" \"{cmd}\"", exiterror=exiterror)
+        return pc_run(["ssh", "-o", "ConnectTimeout=1", self.ssh_name, cmd], exiterror=exiterror)
 
     def restart(self):
         print("Restarting remarkable interface")
@@ -259,12 +259,11 @@ class RemarkableFile(AbstractFile):
         if self.is_directory():
             os.makedirs(outfile, exist_ok=True) # make directories ourselves
         else: # is file
-            cmd = f"{DIR}/{renderer} \"{infile}\" \"{outfile}\""
-            pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
+            pc_run([f"{DIR}/{renderer}", infile, outfile], exiterror=f"Failed to render {self.path()}")
 
             # double-check that file was downloaded
             if not os.path.exists(outfile):
-                panic(f"Failed to render {self.path()} with {cmd}")
+                panic(f"Failed to render {self.path()}")
 
             # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
