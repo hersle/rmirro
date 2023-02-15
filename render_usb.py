@@ -7,15 +7,19 @@
 # The reMarkable must be connected through USB, and the USB web interface must be enabled!
 
 import sys
+import os.path
 import urllib.request
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    assert len(args) == 2, "usage: render_usb.py uuid outfile" # require UUID and output file
+    assert len(args) == 2, "usage: render_usb.py infile outfile"
 
-    uuid = args[0]
+    infile = args[0]
     outfile = args[1]
 
+    # RM file stems end with their uuid,
+    # to render and download it from the USB web interface
+    uuid = os.path.basename(infile)
     url = f"http://10.11.99.1/download/{uuid}/placeholder"
     try:
         urllib.request.urlretrieve(url, filename=outfile)

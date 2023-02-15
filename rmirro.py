@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(
     description = "Synchronize reMarkable with local directory \"[name]/\"",
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
-parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
+parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex infile outfile\" renders a reMarkable document with stem infile to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, --backup, etc?
@@ -107,7 +107,6 @@ class Remarkable:
             if ext == ".metadata":
                 yield id
 
-    # TODO: then remote renderers could take local file path as argument, instead
     def download_metadata(self):
         logger.log(f"Downloading metadata to {self.raw_dir_local}")
 
@@ -256,21 +255,22 @@ class RemarkableFile(AbstractFile):
         return 0 if self.is_root else int(self.metadata()["lastOpened"]) // 1000 # s
 
     def download(self):
-        path_local = rm.processed_dir_local + "/" + self.path()
+        infile  = rm.backup_dir + "/" + self.id
+        outfile = rm.processed_dir_local + "/" + self.path()
         if self.is_directory():
-            os.makedirs(path_local, exist_ok=True) # make directories ourselves
+            os.makedirs(outfile, exist_ok=True) # make directories ourselves
         else: # is file
-            cmd = f"{DIR}/{renderer} \"{self.id}\" \"{path_local}\""
+            cmd = f"{DIR}/{renderer} \"{infile}\" \"{outfile}\""
             pc_run(cmd, exiterror=f"Failed to render {self.path()} with {cmd}")
 
             # double-check that file was downloaded
-            if not os.path.exists(path_local):
+            if not os.path.exists(outfile):
                 panic(f"Failed to render {self.path()} with {cmd}")
 
             # copy last access/modification time from RM to PC file system
             atime = self.last_accessed() # s
             mtime = self.last_modified() # s
-            os.utime(path_local, (atime, mtime)) # sync with access/modification times from RM
+            os.utime(outfile, (atime, mtime)) # sync with access/modification times from RM
 
     def on_computer(self):
         pc_file = ComputerFile(rm.processed_dir_local).find(self.path())
