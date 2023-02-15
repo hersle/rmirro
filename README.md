@@ -5,8 +5,8 @@
 `rmirro.py` **synchronizes files between your reMarkable and computer in both directions without cloud access**.
 It pulls PDFs of your reMarkable's documents to a folder on your computer,
 and pushes PDFs and EPUBs that you add to this folder back to your Remarkable.
-Effectively, it is a tool that **integrates your reMarkable with your computer's file system**,
-so you can build your own workflow on top with whichever tools you prefer.
+Effectively, the tool **integrates your reMarkable with your computer's file system**,
+so you can build your own workflow on top.
 
 ## Requirements
 
