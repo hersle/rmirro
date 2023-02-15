@@ -15,7 +15,7 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 
 parser = argparse.ArgumentParser(
     prog = "rmirro",
-    description = "Synchronise reMarkable with local directory \"[name]/\"",
+    description = "Synchronize reMarkable with local directory \"[name]/\"",
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
 parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex uuid outfile\" renders a reMarkable document of given uuid to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
@@ -66,8 +66,9 @@ class Remarkable:
         self.ssh_name = ssh_name
 
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl"
-        self.processed_dir_local = f"{self.ssh_name}"
-        self.raw_dir_local = os.path.abspath(self.processed_dir_local + "/.metadata")
+        self.processed_dir_local = os.path.abspath(f"{self.ssh_name}")
+        self.raw_dir_local = os.path.abspath(f"{self.ssh_name}_metadata")
+        self.backup_dir = os.path.abspath(f"{self.ssh_name}_backup")
         self.last_sync_path = self.processed_dir_local + "/.last_sync"
 
         # "ping" to check if we do indeed have a remarkable connected
@@ -77,6 +78,7 @@ class Remarkable:
         self.ssh_ip = pc_run(f"ssh -o ConnectTimeout=1 \"{self.ssh_name}\" -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
         logger.log(f"Connected to {self.ssh_name} ({self.ssh_ip})")
 
+        self.backup()
         self.download_metadata()
 
         # RM .metadata files store the parent of each file.
@@ -105,15 +107,19 @@ class Remarkable:
             if ext == ".metadata":
                 yield id
 
-    # TODO: instead download *all* raw files to do a backup while we're at it?
     # TODO: then remote renderers could take local file path as argument, instead
     def download_metadata(self):
-        logger.log("Downloading metadata")
+        logger.log(f"Downloading metadata to {self.raw_dir_local}")
 
         # download/update local storage of .metadata files,
         # deleting any files on PC that are no longer on RM
         os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
         pc_run(f"rsync -az --delete-excluded --include=\"*.metadata\" --exclude=\"*\" \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.raw_dir_local}/\"", exiterror="Failed downloading metadata")
+
+    def backup(self):
+        logger.log(f"Backing up raw files to {self.backup_dir}")
+        os.makedirs(self.backup_dir, exist_ok=True) # create directories if they do not exist
+        pc_run(f"rsync -az --delete \"{self.ssh_name}:{self.raw_dir_remote}/\" \"{self.backup_dir}/\"", exiterror="Failed backing up raw files")
 
     def read_file(self, filename):
         with open(self.raw_dir_local + "/" + filename, "r") as file:
@@ -411,6 +417,8 @@ if __name__ == "__main__":
             rm_file = pc_file.on_remarkable()
             if not rm_file: # already processed files on RM in last loop
                 yield (rm_file, pc_file)
+
+    print(f"Synchronizing PDFs with {rm.processed_dir_local}")
 
     logger.log("Comparing files and collecting commands")
     commands = {"PULL": [], "PUSH": [], "DROP": []}

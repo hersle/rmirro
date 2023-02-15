@@ -32,8 +32,8 @@ What is done to each file depends on where it is present and when it was last mo
 | deleted on PC,                                   | **pull** it to PC again (*not* delete it on RM, for safety). |
 
 Before acting on files, the program presents its intentions and prompts the user for confirmation.
-Beware that it may have bugs and has the potential to overwrite and delete files on your reMarkable and computer,
-so *[back up your reMarkable](https://remarkablewiki.com/tech/file_transfer#making_local_backups) to mitigate this!*
+Beware that it may have bugs and has the potential to overwrite and delete files on your reMarkable and computer!
+Therefore, `rmirro.py` keeps a [raw backup](https://remarkablewiki.com/tech/file_transfer#making_local_backups) of your reMarkable in `./remarkable_backup/`.
 
 ### Auto-synchronize when the reMarkable is connected by USB cable
 
