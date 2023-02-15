@@ -75,8 +75,7 @@ class Remarkable:
         if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable":
             panic("Could not verify that SSH host {self.ssh_name} is a reMarkable")
 
-        self.ssh_ip = pc_run(f"ssh -o ConnectTimeout=1 \"{self.ssh_name}\" -v exit 2>&1 | grep 'Connecting to' | cut -d' ' -f4") # e.g. 10.11.99.1
-        logger.log(f"Connected to {self.ssh_name} ({self.ssh_ip})")
+        logger.log(f"Connected to {self.ssh_name}")
 
         self.backup()
         self.download_metadata()
