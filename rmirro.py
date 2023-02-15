@@ -46,14 +46,15 @@ class Logger:
         self.id = None
 
     def notify(self, text, urgency="normal", icon="input-tablet"):
-        title = f"Synchronizing reMarkable"
-        cmd  = ["notify-send"]
-        cmd += ["--print-id"]
-        cmd += [f"--replace-id={self.id}"] if self.id else []
-        cmd += [f"--app-name=rmirro", f"--urgency={urgency}", f"--icon={icon}"]
-        cmd += [title, text]
-        output = pc_run(cmd, verbose=False)
-        self.id = int(output)
+        if shutil.which("notify-send") is not None:
+            title = f"Synchronizing reMarkable"
+            cmd  = ["notify-send"]
+            cmd += ["--print-id"]
+            cmd += [f"--replace-id={self.id}"] if self.id else []
+            cmd += [f"--app-name=rmirro", f"--urgency={urgency}", f"--icon={icon}"]
+            cmd += [title, text]
+            output = pc_run(cmd, verbose=False)
+            self.id = int(output)
 
     def log(self, text, urgency="normal", console=True, notification=True):
         if console:
