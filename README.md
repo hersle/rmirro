@@ -20,7 +20,7 @@ so you can build your own workflow on top.
 Just run `rmirro.py`. Read `rmirro.py --help` to see how you can change its default behavior.
 
 It synchronizes files between the reMarkable (RM) and the computer (PC) folder `./remarkable/`.
-The first run processes *all* files on the reMarkable and may take a long time,
+The first run it processes *all* files on the reMarkable and may take a long time,
 but following runs skip unchanged files and are quicker.
 What is done to each file depends on where it is present and when it was last modified:
 
