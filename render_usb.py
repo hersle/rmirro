@@ -17,8 +17,8 @@ if __name__ == "__main__":
     infile = args[0]
     outfile = args[1]
 
-    # RM file stems end with their uuid,
-    # to render and download it from the USB web interface
+    # RM file stems end with their UUID:
+    # "abuse" this to render and download it from the USB web interface
     uuid = os.path.basename(infile)
     url = f"http://10.11.99.1/download/{uuid}/placeholder"
     try:

@@ -24,6 +24,6 @@ if __name__ == "__main__":
     infile = args[0]
     outfile = args[1]
 
-    maxio_rmtool_path = os.environ["HOME"] + "/Remarkable/maxio/rm_tools/rmtool.py" # modify depending on where maxio is installed!
+    maxio_rmtool_path = os.environ["HOME"] + "/Remarkable/maxio/rm_tools/rmtool.py" # NOTE: modify depending on where maxio is installed!
     status, _ = subprocess.getstatusoutput(f"{maxio_rmtool_path} convert \"{infile}\" \"{outfile}\"") # convert raw files to PDF
     exit(status)
