@@ -4,8 +4,8 @@
 
 `rmirro.py` **synchronizes files between your reMarkable and computer in both directions without cloud access**.
 It pulls PDFs of your reMarkable's documents to a folder on your computer,
-and pushes PDFs and EPUBs that you add to this folder back to your Remarkable.
-Effectively, the tool **integrates your reMarkable with your computer's file system**,
+and pushes PDFs and EPUBs that you add to this folder back to your reMarkable.
+Effectively, this tool **integrates your reMarkable with your computer's file system**,
 so you can build your own workflow on top.
 
 ## Requirements
@@ -26,14 +26,15 @@ What is done to each file depends on where it is present and when it was last mo
 
 | If a file is ...                                 | then `rmirro.py` will ...                                    |
 |:-------------------------------------------------|:-------------------------------------------------------------|
-| added/modified on RM (more recently than on PC), | **pull** it to PC.                                           |
-| added/modified on PC (more recently than on RM), | **push** it to RM.                                           |
+| added/modified on RM (more recently than on PC), | **pull** it to PC (overwriting any existing file).           |
+| added/modified on PC (more recently than on RM), | **push** it to RM (overwriting any existing file).           |
 | deleted on RM,                                   | **drop** (delete) it on PC, too.                             |
 | deleted on PC,                                   | **pull** it to PC again (*not* delete it on RM, for safety). |
 
-Before acting on files, the program presents its intentions and prompts the user for confirmation.
-Beware that it may have bugs and has the potential to overwrite and delete files on your reMarkable and computer!
-Therefore, `rmirro.py` keeps a [raw backup](https://remarkablewiki.com/tech/file_transfer#making_local_backups) of your reMarkable in `./remarkable_backup/`.
+The program asks for confirmation before carrying out its intended file actions.
+Beware that it is a hobby project with the potential to overwrite and delete files on your reMarkable and computer,
+and that it may have bugs!
+Therefore, `rmirro.py` beings by making a [raw backup](https://remarkablewiki.com/tech/file_transfer#making_local_backups) of your reMarkable in `./remarkable_backup/`.
 
 ### Auto-synchronize when the reMarkable is connected by USB cable
 
