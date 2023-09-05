@@ -167,7 +167,14 @@ class Remarkable:
     # Create a .metadata file in the PC storage and upload it to RM
     def write_metadata(self, id, metadata):
         self.write_json(f"{id}.metadata", metadata)
-        self.children_cache[metadata["parent"]].append(id)
+
+        # update cache (parent -> child)
+        if id not in self.children_cache[metadata["parent"]]:
+            self.children_cache[metadata["parent"]].append(id)
+
+        # update cache (child -> nothing)
+        if id not in self.children_cache:
+            self.children_cache[id] = []
 
     # Create a .content file in the PC storage and upload it to RM
     def write_content(self, id, content):
@@ -407,7 +414,7 @@ class ComputerFile(AbstractFile):
         else:
             # RM file does not exist, so we have to create it from scratch
             assert self.parent().on_remarkable(), "cannot upload file whose parent does not exist!"
-            id = uuid.uuid4() # create new ID
+            id = str(uuid.uuid4()) # create new ID
             assert id not in rm.ids(), f"{id} already exists on {rm.ssh_name}"
             metadata = {
                 "visibleName": self.name(),
