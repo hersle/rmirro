@@ -43,7 +43,7 @@ def pc_run(cmd, exiterror=None, capture=True):
 
     proc = subprocess.run(cmd, capture_output=capture, encoding="utf-8")
     if proc.returncode != 0 and exiterror is not None:
-        print(proc.stderr)
+        print(proc.stderr, end="")
         panic(exiterror)
 
     return proc.stdout
