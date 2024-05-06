@@ -14,6 +14,7 @@ so you can build your own workflow on top.
 * Access to the reMarkable's official PDF renderer through its [USB web interface](https://remarkablewiki.com/tech/webinterface)
   **or** any third-party PDF renderer of raw reMarkable files on your computer,
   like [maxio](https://github.com/hersle/maxio/tree/overlay), [rmrl](https://github.com/rschroll/rmrl) or [rmc](https://github.com/ricklupton/rmc).
+* [rsync](https://rsync.samba.org/) (comes with most Linux distributions, by default).
 
 ## Usage and operation
 
