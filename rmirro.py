@@ -37,8 +37,7 @@ def panic(error):
 # Optionally panic with exiterror if it fails
 # Optionally capture and return its output
 def pc_run(cmd, exiterror=None, capture=True):
-    verbose = getattr(args, "verbose")
-    if verbose:
+    if args.verbose:
         print(">", subprocess.list2cmdline(cmd)) # print the command
 
     proc = subprocess.run(cmd, capture_output=capture, encoding="utf-8")
@@ -99,6 +98,8 @@ class Remarkable:
             self.children_cache[id] = [] # initialize list for each file
         for id in self.ids():
             metadata = self.read_metadata(id)
+            if args.verbose:
+                print(f"Read {id = } with {metadata = }")
             parent_id = metadata["parent"]
             self.children_cache[parent_id].append(id)
 
