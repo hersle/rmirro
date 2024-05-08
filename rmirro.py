@@ -19,13 +19,13 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
 parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex infile outfile\" renders a reMarkable document with stem infile to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
+parser.add_argument("-o", "--output_dir", type=str, default="remarkable", help="name of directory for processed files.")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, --backup, etc?
 # TODO: let user exclude certain files? how would this pan out if they are suddenly included again?
 # TODO: build symlink directory structure by tags?
-# TODO: set --output directory
 # TODO: support renderers that output e.g. SVG instead of PDF?
 
 # Print an error message and exit
@@ -72,11 +72,12 @@ class Logger:
 
 # Interface to communicate with reMarkable and operate on its raw file system
 class Remarkable:
-    def __init__(self, ssh_name):
+    def __init__(self, ssh_name, output_dir):
         self.ssh_name = ssh_name # e.g. "remarkable"
+        self.output_dir = output_dir # Output directory
 
         self.raw_dir_remote = "/home/root/.local/share/remarkable/xochitl" # path to raw notes on RM
-        self.processed_dir_local = os.path.abspath(f"{self.ssh_name}") # path to rendered PDFs on PC (e.g. remarkable/)
+        self.processed_dir_local = os.path.abspath(f"{self.output_dir}") # path to rendered PDFs on PC (e.g. remarkable/)
         self.raw_dir_local = os.path.abspath(f"{self.ssh_name}_metadata") # path to *.metadata files on PC (downloaded from RM) (e.g. remarkable_metadata/)
         self.backup_dir = os.path.abspath(f"{self.ssh_name}_backup") # path to save a backup of all raw RM files on PC (e.g. remarkable_backup/)
         self.last_sync_path = self.processed_dir_local + "/.last_sync" # path to a file on PC with the timestamp at which the last sync was performed
@@ -485,10 +486,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ssh_name = getattr(args, "name")
     renderer = getattr(args, "renderer")
+    output_dir = getattr(args, "output_dir")
 
     logger = Logger()
 
-    rm = Remarkable(ssh_name)
+    os.makedirs(output_dir, exist_ok=True) # make a directory for processed files
+    rm = Remarkable(ssh_name, output_dir)
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
 
