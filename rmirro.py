@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(
     description = "Synchronize reMarkable with local directory \"[name]/\"",
 )
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
-parser.add_argument("-r", "--renderer", type=str, default="render_usb.py", metavar="ex", help="name of an executable in this project's directory such that \"ex infile outfile\" renders a reMarkable document with stem infile to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
+parser.add_argument("-r", "--renderers", default=["render_usb.py"], nargs="+", metavar="EX", help="list of one or more executables EX in this project's directory such that \"EX infile outfile\" renders a reMarkable document with stem infile to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
 
 # TODO: --favorites-only (or by tags)
@@ -45,7 +45,7 @@ def pc_run(cmd, exiterror=None, capture=True):
         print(proc.stderr, end="")
         panic(exiterror)
 
-    return proc.stdout
+    return proc
 
 # Interface to communicate with reMarkable and operate on its raw file system
 class Remarkable:
@@ -60,7 +60,7 @@ class Remarkable:
 
         # "ping" to check if we do indeed have a remarkable connected
         print(f"Connecting to {self.ssh_name}")
-        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable\n":
+        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH").stdout != "reMarkable\n":
             panic(f"Could not verify that SSH host {self.ssh_name} is a reMarkable")
         print(f"Connected to {self.ssh_name}")
 
@@ -288,11 +288,19 @@ class RemarkableFile(AbstractFile):
         if self.is_directory():
             os.makedirs(outfile, exist_ok=True) # make directories ourselves
         else: # is file
-            pc_run([f"{DIR}/{renderer}", infile, outfile], exiterror=f"{renderer} failed to render {self.path()}") # render with passed renderer
+            success = False
+            for renderer in renderers:
+                success = pc_run([f"{DIR}/{renderer}", infile, outfile]).returncode == 0 # try to render
+                if len(renderers) > 1 or args.verbose:
+                    print(f"- {renderer}", "succeeded" if success else "failed")
+                if success:
+                    break # jump out upon first successful render
 
-            # Double check that file was downloaded
-            if not os.path.exists(outfile):
-                panic(f"{renderer} failed to render {self.path()}")
+            # Double check that file was indeed downloaded
+            success = success and os.path.exists(outfile)
+
+            if not success:
+                panic(f"All renderers failed to render {self.path()}")
 
             # Copy last access/modification time from RM to PC file system
             # (these are used to determine sync actions)
@@ -461,7 +469,7 @@ def sync_action_and_reason(rm_file, pc_file):
 if __name__ == "__main__":
     args = parser.parse_args()
     ssh_name = getattr(args, "name")
-    renderer = getattr(args, "renderer")
+    renderers = getattr(args, "renderers")
 
     rm = Remarkable(ssh_name)
     rm_root = RemarkableFile()
@@ -478,6 +486,7 @@ if __name__ == "__main__":
                 yield (rm_file, pc_file)
 
     print(f"Synchronizing PDFs with {rm.processed_dir_local}")
+    print("Will use renderer(s)", " -> ".join(renderers))
 
     print("Comparing files and collecting commands")
     commands = {"PULL": [], "PUSH": [], "DROP": []}
@@ -508,7 +517,7 @@ if __name__ == "__main__":
         print("Did nothing (everything was up-to-date)")
         exit()
     else:
-        answer = input(f"Pull {npull}, push {npush} and drop {ndrop} files, rendering with {renderer} (y/n)? ")
+        answer = input(f"Pull {npull}, push {npush} and drop {ndrop} files (y/n)? ")
         if answer != "y": # accept nothing but a resounding yes
             print("Aborted (no changes have been made)")
             exit()
