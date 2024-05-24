@@ -30,7 +30,7 @@ parser.add_argument("-v", "--verbose", action="store_true", help="print executed
 
 # Print an error message and exit
 def panic(error):
-    logger.log("ERROR: " + error)
+    print("ERROR: " + error)
     exit(1) # nonzero status code marks failure
 
 # Run a shell command on the local computer,
@@ -47,29 +47,6 @@ def pc_run(cmd, exiterror=None, capture=True):
 
     return proc.stdout
 
-class Logger:
-    def __init__(self):
-        self.id = None
-
-    # Create desktop notification if notify-send is installed
-    def notify(self, text, urgency="normal", icon="input-tablet"):
-        if shutil.which("notify-send") is not None:
-            title = f"Synchronizing reMarkable"
-            cmd  = ["notify-send"]
-            cmd += ["--print-id"] # print an ID that identifies the notification 
-            cmd += [f"--replace-id={self.id}"] if self.id else [] # replace existing notification, instead of creating a new one every time
-            cmd += [f"--app-name=rmirro", f"--urgency={urgency}", f"--icon={icon}"]
-            cmd += [title, text]
-            output = pc_run(cmd)
-            self.id = int(output) # save ID of notification, so we can replace it later
-
-    # Common interface for printing a log message, both to console and in a notification
-    def log(self, text, urgency="normal", console=True, notification=True):
-        if console:
-            print(text)
-        if notification:
-            self.notify(text, urgency=urgency)
-
 # Interface to communicate with reMarkable and operate on its raw file system
 class Remarkable:
     def __init__(self, ssh_name):
@@ -82,10 +59,10 @@ class Remarkable:
         self.last_sync_path = self.processed_dir_local + "/.last_sync" # path to a file on PC with the timestamp at which the last sync was performed
 
         # "ping" to check if we do indeed have a remarkable connected
-        logger.log(f"Connecting to {self.ssh_name}")
+        print(f"Connecting to {self.ssh_name}")
         if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH") != "reMarkable\n":
             panic(f"Could not verify that SSH host {self.ssh_name} is a reMarkable")
-        logger.log(f"Connected to {self.ssh_name}")
+        print(f"Connected to {self.ssh_name}")
 
         self.backup()
         self.download_metadata()
@@ -124,13 +101,13 @@ class Remarkable:
 
     # Download all raw *.metadata files from RM with rsync
     def download_metadata(self):
-        logger.log(f"Downloading metadata to {self.raw_dir_local}")
+        print(f"Downloading metadata to {self.raw_dir_local}")
         os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
         pc_run(["rsync", "--info=progress2", "-az", "--delete-excluded", "--include=*.metadata", "--exclude=*", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.raw_dir_local}/"], exiterror="Failed downloading metadata", capture=False) # --delete-excluded deletes files on PC that are no longer on RM
 
     # Download all raw files from RM with rsync
     def backup(self):
-        logger.log(f"Backing up raw files to {self.backup_dir}")
+        print(f"Backing up raw files to {self.backup_dir}")
         os.makedirs(self.backup_dir, exist_ok=True) # create directories if they do not exist
         pc_run(["rsync", "--info=progress2", "-az", "--delete", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.backup_dir}/"], exiterror="Failed backing up raw files", capture=False) # --delete deletes files on PC that are no longer on RM
 
@@ -486,8 +463,6 @@ if __name__ == "__main__":
     ssh_name = getattr(args, "name")
     renderer = getattr(args, "renderer")
 
-    logger = Logger()
-
     rm = Remarkable(ssh_name)
     rm_root = RemarkableFile()
     pc_root = ComputerFile(rm.processed_dir_local)
@@ -504,7 +479,7 @@ if __name__ == "__main__":
 
     print(f"Synchronizing PDFs with {rm.processed_dir_local}")
 
-    logger.log("Comparing files and collecting commands")
+    print("Comparing files and collecting commands")
     commands = {"PULL": [], "PUSH": [], "DROP": []}
     for rm_file, pc_file in iterate_files():
         action, reason = sync_action_and_reason(rm_file, pc_file)
@@ -530,18 +505,18 @@ if __name__ == "__main__":
         print(f"? ({i+1}/{len(commands)}) {action}: {path}")
 
     if len(commands) == 0:
-        logger.log("Finished (everything was up-to-date)")
+        print("Did nothing (everything was up-to-date)")
         exit()
     else:
-        logger.log(f"Pull {npull}, push {npush} and drop {ndrop} files, rendering with {renderer}?", console=False) # print in console on next line
         answer = input(f"Pull {npull}, push {npush} and drop {ndrop} files, rendering with {renderer} (y/n)? ")
         if answer != "y": # accept nothing but a resounding yes
-            logger.log("Aborted (no changes have been made)")
+            print("Aborted (no changes have been made)")
             exit()
+        print(f"Pulling {npull}, pushing {npush} and dropping {ndrop} files")
 
     # Execute commands
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        logger.log(f"! ({i+1}/{len(commands)}) {action}: {path}")
+        print(f"! ({i+1}/{len(commands)}) {action}: {path}")
         if action == "PULL":
             rm_file.download()
         elif action == "PUSH":
@@ -555,4 +530,4 @@ if __name__ == "__main__":
     if npush > 0:
         rm.restart()
 
-    logger.log(f"Finished (pulled {npull}, pushed {npush} and dropped {ndrop} files)")
+    print(f"Pulled {npull}, pushed {npush} and dropped {ndrop} files")
