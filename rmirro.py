@@ -288,11 +288,11 @@ class RemarkableFile(AbstractFile):
         if self.is_directory():
             os.makedirs(outfile, exist_ok=True) # make directories ourselves
         else: # is file
-            pc_run([f"{DIR}/{renderer}", infile, outfile], exiterror=f"Failed to render {self.path()}") # render with passed renderer
+            pc_run([f"{DIR}/{renderer}", infile, outfile], exiterror=f"{renderer} failed to render {self.path()}") # render with passed renderer
 
             # Double check that file was downloaded
             if not os.path.exists(outfile):
-                panic(f"Failed to render {self.path()}")
+                panic(f"{renderer} failed to render {self.path()}")
 
             # Copy last access/modification time from RM to PC file system
             # (these are used to determine sync actions)
