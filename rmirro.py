@@ -290,9 +290,11 @@ class RemarkableFile(AbstractFile):
         else: # is file
             success = False
             for renderer in renderers:
-                success = pc_run([f"{DIR}/{renderer}", infile, outfile]).returncode == 0 # try to render
+                proc = pc_run([f"{DIR}/{renderer}", infile, outfile]) # try to render
+                success = proc.returncode == 0
                 if len(renderers) > 1 or args.verbose:
                     print(f"- {renderer}", "succeeded" if success else "failed")
+                print(proc.stderr, end="")
                 if success:
                     break # jump out upon first successful render
 
