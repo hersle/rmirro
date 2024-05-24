@@ -502,7 +502,7 @@ if __name__ == "__main__":
     npush = actions.count("PUSH")
     ndrop = actions.count("DROP")
     for i, (action, reason, path, rm_file, pc_file) in enumerate(commands):
-        print(f"? ({i+1}/{len(commands)}) {action}: {path}")
+        print(f"? ({i+1}/{len(commands)}) {action}: {path}" + (f" ({reason})" if args.verbose else ""))
 
     if len(commands) == 0:
         print("Did nothing (everything was up-to-date)")
