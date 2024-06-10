@@ -10,11 +10,13 @@ so you can build your own workflow on top.
 
 ## Requirements
 
+* A file system supporting setting file attributes and storing timestamps programmatically (e.g. NTFS, EXT4).
+* [rsync](https://rsync.samba.org/) (comes with most Linux distributions, by default). In order to run the script in Windows 10 you have to install the [Windows Subsystem for Linux](https://sanajitghosh.medium.com/run-python-codes-develop-ml-models-using-wsl-windows-10-40f8bb39fd45) and establish the other requirements within WSL.
 * [Passwordless SSH access](https://remarkablewiki.com/tech/ssh#passwordless_login_with_ssh_keys) to your reMarkable with `ssh remarkable`.
 * Access to the reMarkable's official PDF renderer through its [USB web interface](https://remarkablewiki.com/tech/webinterface)
   **or** any third-party PDF renderer of raw reMarkable files on your computer,
   like [maxio](https://github.com/hersle/maxio/tree/overlay), [rmrl](https://github.com/rschroll/rmrl) or [rmc](https://github.com/ricklupton/rmc).
-* [rsync](https://rsync.samba.org/) (comes with most Linux distributions, by default).
+
 
 ## Usage and operation
 
