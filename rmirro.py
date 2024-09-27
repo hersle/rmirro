@@ -60,7 +60,7 @@ class Remarkable:
 
         # "ping" to check if we do indeed have a remarkable connected
         print(f"Connecting to {self.ssh_name}")
-        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH").stdout != "reMarkable\n":
+        if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH").stdout not in ("reMarkable\n", "imx8mm-ferrari\n"): # covers (RM1, RM2) and (RMPP)
             panic(f"Could not verify that SSH host {self.ssh_name} is a reMarkable")
         print(f"Connected to {self.ssh_name}")
 
