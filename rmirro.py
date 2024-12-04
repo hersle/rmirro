@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("name", type=str, nargs="?", default="remarkable", help="SSH hostname of reMarkable reachable with \"ssh [name]\" without password (default: remarkable)")
 parser.add_argument("-r", "--renderers", default=["render_usb.py"], nargs="+", metavar="EX", help="list of one or more executables EX in this project's directory such that \"EX infile outfile\" renders a reMarkable document with stem infile to the PDF outfile (default: render_usb.py - using the official USB web interface renderer)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print executed shell commands")
+parser.add_argument("-s", "--skip", default=["Quick sheets"], nargs="*", help="skip file names (default: skip \"Quick sheets\"; pass empty -s to include)")
 
 # TODO: --favorites-only (or by tags)
 # TODO: --pull-only, --push-only, --backup, etc?
@@ -434,7 +435,10 @@ class ComputerFile(AbstractFile):
             os.remove(self.path())
 
 # Determine what to do, and why, when syncing file with given RM/PC representations
-def sync_action_and_reason(rm_file, pc_file):
+def sync_action_and_reason(rm_file, pc_file, skip=[]):
+    if (rm_file and rm_file.name() in skip) or (pc_file and pc_file.name() in skip):
+        return "SKIP", "in --skip"
+
     if rm_file and not pc_file:
         return "PULL", "only on RM"
 
@@ -472,6 +476,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ssh_name = getattr(args, "name")
     renderers = getattr(args, "renderers")
+    skip = getattr(args, "skip")
 
     rm = Remarkable(ssh_name)
     rm_root = RemarkableFile()
@@ -493,10 +498,12 @@ if __name__ == "__main__":
     print("Comparing files and collecting commands")
     commands = {"PULL": [], "PUSH": [], "DROP": []}
     for rm_file, pc_file in iterate_files():
-        action, reason = sync_action_and_reason(rm_file, pc_file)
+        action, reason = sync_action_and_reason(rm_file, pc_file, skip=skip)
         path = rm_file.path() if rm_file else pc_file.path_on_remarkable()
         if action != "SKIP":
             commands[action].append((action, reason, path, rm_file, pc_file))
+        elif reason != "up-to-date":
+            print(f"SKIP {path}" + (f" ({reason})" if args.verbose else ""))
 
     # Sort commands
     def key(command):
