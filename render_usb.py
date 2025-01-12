@@ -25,6 +25,5 @@ if __name__ == "__main__":
         urllib.request.urlretrieve(url, filename=outfile)
         exit(0) # success
     except Exception as e:
-        print(f"Could not download {url} from reMarkable USB web interface", file=sys.stderr)
-        print(f"Make sure that Settings > Storage > USB web interface is enabled", file=sys.stderr)
+        raise(RuntimeError(f"Could not download {url} from reMarkable USB web interface. Make sure that Settings > Storage > USB web interface is enabled"))
         exit(1) # failure

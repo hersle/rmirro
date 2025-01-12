@@ -11,6 +11,6 @@ if __name__ == "__main__":
     infile = args[0]
     outfile = args[1]
 
-    print(f"Refusing to render {infile}", file=sys.stderr)
+    raise(RuntimeError(f"Refusing to render {infile}"))
 
     exit(1) # fail
