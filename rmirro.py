@@ -59,6 +59,11 @@ class Remarkable:
         self.backup_dir = os.path.abspath(f"{self.ssh_name}_backup") # path to save a backup of all raw RM files on PC (e.g. remarkable_backup/)
         self.last_sync_path = self.processed_dir_local + "/.last_sync" # path to a file on PC with the timestamp at which the last sync was performed
 
+        # create directories if they do not exist
+        os.makedirs(self.processed_dir_local, exist_ok=True)
+        os.makedirs(self.raw_dir_local, exist_ok=True)
+        os.makedirs(self.backup_dir, exist_ok=True)
+
         # "ping" to check if we do indeed have a remarkable connected
         print(f"Connecting to {self.ssh_name}")
         if self.run("uname -n", exiterror=f"Could not connect to {self.ssh_name} with SSH").stdout not in ("reMarkable\n", "imx8mm-ferrari\n"): # covers (RM1, RM2) and (RMPP)
@@ -103,13 +108,11 @@ class Remarkable:
     # Download all raw *.metadata files from RM with rsync
     def download_metadata(self):
         print(f"Downloading metadata to {self.raw_dir_local}")
-        os.makedirs(self.raw_dir_local, exist_ok=True) # create directories if they do not exist
         pc_run(["rsync", "--info=progress2", "-az", "--delete-excluded", "--include=*.metadata", "--exclude=*", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.raw_dir_local}/"], exiterror="Failed downloading metadata", capture=False) # --delete-excluded deletes files on PC that are no longer on RM
 
     # Download all raw files from RM with rsync
     def backup(self):
         print(f"Backing up raw files to {self.backup_dir}")
-        os.makedirs(self.backup_dir, exist_ok=True) # create directories if they do not exist
         pc_run(["rsync", "--info=progress2", "-az", "--delete", f"{self.ssh_name}:{self.raw_dir_remote}/", f"{self.backup_dir}/"], exiterror="Failed backing up raw files", capture=False) # --delete deletes files on PC that are no longer on RM
 
     # Read a RM file that has been downloaded to PC
