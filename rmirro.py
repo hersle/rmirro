@@ -283,7 +283,11 @@ class RemarkableFile(AbstractFile):
 
     # Returns timestamp at which file was last accessed (opened)
     def last_accessed(self):
-        return 0 if self.is_root else int(self.metadata()["lastOpened"]) // 1000 # s
+        if self.is_root:
+            return 0
+        if "lastOpened" in self.metadata():
+            return int(self.metadata()["lastOpened"]) // 1000 # s
+        return self.last_modified()
 
     # Download this file to its corresponding location in the PC directory
     def download(self):
