@@ -236,10 +236,12 @@ class RemarkableFile(AbstractFile):
             return None
 
     # Return this file's name (e.g. "document")
+    # Slashes are allowed in RM names (e.g. "meeting 20/11/2025"), but are path separators on the PC,
+    # so replace them to keep the name a single path component
     def name(self):
         if self.is_root:
             return ""
-        return self.metadata()["visibleName"]
+        return self.metadata()["visibleName"].replace("/", "-")
 
     # Return this file's full path as it appears in the visual RM file system (e.g. notes/document.pdf)
     def path(self):
